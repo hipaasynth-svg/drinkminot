@@ -87,7 +87,8 @@ var RAW = [
   ["7 Brew", "Minot, ND", "Verify hours", "Cafés & Coffee", false, false],
   ["Blissful Bee Juicery", "North & South locations, Minot, ND", "Verify hours", "Juice & Nutrition", false, false],
   ["Superior Nutrition Minot", "Minot, ND", "Verify hours", "Juice & Nutrition", false, false],
-  ["Minot Nutrition Addiction", "Minot, ND", "Verify hours", "Juice & Nutrition", false, false]
+  ["Minot Nutrition Addiction", "Minot, ND", "Verify hours", "Juice & Nutrition", false, false],
+  ["Down Under Bar", "Minot, ND", "Mon-Thu 10am-10pm, Fri 10am-12am, Sat verify, Sun 11am-10pm", "Bars & Lounges", true, false]
 ];
 
 function slug(name) { return String(name).toLowerCase().replace(/[^a-z0-9]/g, ''); }
