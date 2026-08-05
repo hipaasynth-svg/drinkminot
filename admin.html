@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DrinkMinot — Admin</title>
+<style>
+  :root{--bg:#151226;--ink:#F3EFFA;--muted:#9A93B4;--card:#211C3B;--cream:#2A2448;--accent:#C6A15B;--line:rgba(255,255,255,.08)}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+  .wrap{max-width:760px;margin:0 auto;padding:18px 16px 60px}
+  .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .brand{font-size:20px;font-weight:800}.brand span{color:var(--accent)}
+  a.home{font-size:13px;font-weight:700;color:var(--muted)}
+  .note{background:rgba(198,161,91,.1);border:1px solid rgba(198,161,91,.3);color:#D8BE8A;border-radius:10px;padding:10px 12px;font-size:12.5px;font-weight:600;line-height:1.45;margin:8px 0 16px}
+  .gate{max-width:360px;margin:60px auto;display:flex;flex-direction:column;gap:12px;text-align:center}
+  input,button,select{font-family:inherit}
+  input[type=text],input[type=password]{border:1px solid var(--line);border-radius:9px;padding:11px 12px;font-size:16px;background:#1b1733;color:var(--ink);width:100%}
+  .btn{border:none;border-radius:10px;padding:12px 16px;font-size:14px;font-weight:800;cursor:pointer}
+  .btn.accent{background:var(--accent);color:#1a1430}.btn.ghost{background:#1b1733;border:1px solid var(--line);color:var(--ink)}
+  .tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+  .tools input{flex:1;min-width:180px}
+  .item{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px;display:flex;gap:12px;align-items:flex-start}
+  .thumb{width:112px;flex:none;height:70px;border-radius:10px;background:var(--cream) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:#8A83A6;font-size:11px;font-weight:700;text-align:center;position:relative}
+  .thumb .s21{position:absolute;left:4px;top:4px;width:26px;height:26px;border-radius:50%;background:#0c0a16;border:1.5px solid var(--accent);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;transform:rotate(-9deg)}
+  .info{flex:1;min-width:0}
+  .rn{font-weight:800;font-size:15px}
+  .badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:3px}
+  .b{font-size:10px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;padding:2px 7px;border-radius:20px}
+  .b.cat{color:var(--accent);background:rgba(198,161,91,.14);border:1px solid rgba(198,161,91,.3)}
+  .b.eat{color:#E8703F;background:rgba(213,87,43,.14);border:1px solid rgba(213,87,43,.32)}
+  .ad{font-size:12px;color:var(--muted);margin-top:4px}
+  .pw{font-size:12px;margin-top:6px}.pw code{background:var(--cream);padding:2px 6px;border-radius:6px;font-weight:700}
+  .tag{font-size:12px;margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .tag code{background:var(--cream);padding:2px 6px;border-radius:6px;font-weight:700;word-break:break-all}
+  .ctl{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px;align-items:center}
+  .chip{font-size:11px;font-weight:800;border-radius:20px;padding:5px 10px;cursor:pointer;border:1px solid var(--line);background:#1b1733;color:var(--muted)}
+  .chip.on{background:var(--ink);color:#1a1430;border-color:var(--ink)}
+  .chip.paid.on{background:var(--accent);border-color:var(--accent);color:#1a1430}
+  label.file{font-size:12px;font-weight:800;color:var(--accent);cursor:pointer}
+  label.file input{display:none}
+  .pickThumbs{display:flex;gap:6px;margin-top:8px;align-items:center}
+  .pickThumbs .lbl{font-size:11px;font-weight:700;color:var(--muted);margin-right:2px}
+  .pickThumbSm{width:36px;height:36px;border-radius:7px;background:var(--cream) center/cover no-repeat;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--muted);font-weight:700;cursor:pointer}
+  .pickThumbSm input{display:none}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0c0a16;color:#fff;font-size:13px;font-weight:700;padding:11px 16px;border-radius:22px;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head"><div class="brand">Drink<span>Minot</span> · Admin</div><a class="home" href="./index.html">← Public site</a></div>
+
+  <div id="gate" class="gate">
+    <div style="font-weight:800;font-size:16px">Admin sign-in</div>
+    <input type="password" id="adminPw" placeholder="Admin password">
+    <button class="btn accent" id="adminGo">Enter</button>
+    <div id="gateErr" style="color:#F0866B;font-size:13px;font-weight:700;display:none">Wrong password.</div>
+    <div style="font-size:12px;color:var(--muted)">Default: <b>drink-admin</b> (in shared mode, set <code>DRINK_ADMIN_PASSWORD</code> in Vercel to change it).</div>
+  </div>
+
+  <div id="panel" style="display:none">
+    <div class="note" id="modeNote"></div>
+    <div class="tools">
+      <input type="text" id="search" placeholder="Search venues…">
+      <button class="btn ghost" id="resetAll">Reset data</button>
+    </div>
+    <div id="list"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="./store.js"></script>
+<script>
+(function(){
+  'use strict';
+  var S=window.DrinkStore, $=function(s){return document.querySelector(s);};
+  var adminPw='', all=[];
+  function toast(m){var t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('show');},1700);}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
+  function render(){
+    var q=($('#search').value||'').toLowerCase();
+    var rs=all.filter(function(r){return r.name.toLowerCase().indexOf(q)>-1;});
+    $('#list').innerHTML=rs.map(function(r){
+      var def = r.defaultPassword || S.defaultPassword(r.name);
+      var changed = (r.passwordChanged!==undefined) ? r.passwordChanged : (r.password!==undefined && r.password!==def);
+      var pwLine = changed
+        ? 'Owner password: <b>changed by owner</b> · <span class="chip" data-rmpw="'+r.id+'">Reset to default</span>'
+        : 'Owner password: <code>'+esc(def)+'</code>';
+      var tagUrl = location.origin + '/?r=' + r.id;
+      var badges = (r.category?'<span class="b cat">'+esc(r.category)+'</span>':'')+(r.alsoOnEat?'<span class="b eat">🍔 Also on EatMinot</span>':'');
+      return '<div class="item" data-id="'+r.id+'">'+
+        '<div class="thumb" data-thumb="'+r.id+'">'+(r.over21?'<span class="s21">21+</span>':'')+(r.hasPhoto?'':'No photo')+'</div>'+
+        '<div class="info"><div class="rn">'+esc(r.name)+'</div>'+
+          (badges?'<div class="badges">'+badges+'</div>':'')+
+          '<div class="ad">'+esc(r.address)+'</div>'+
+          '<div class="pw">'+pwLine+'</div>'+
+          '<div class="tag">NFC/QR link: <code>'+esc(tagUrl)+'</code><span class="chip" data-copytag="'+esc(tagUrl)+'">Copy</span></div>'+
+          '<div class="ctl">'+
+            '<label class="file">Upload photo<input type="file" accept="image/*" data-photo="'+r.id+'"></label>'+
+            (r.hasPhoto?'<span class="chip" data-rmphoto="'+r.id+'">Remove photo</span>':'')+
+            '<span class="chip'+(r.claimed?' on':'')+'" data-claim="'+r.id+'">'+(r.claimed?'Claimed ✓':'Unclaimed')+'</span>'+
+            '<span class="chip paid'+(r.paid?' on':'')+'" data-paid="'+r.id+'">'+(r.paid?'Paid ✓':'Free')+'</span>'+
+          '</div>'+
+          (r.paid ? pickThumbsHtml(r) : '')+
+        '</div></div>';
+    }).join('');
+    wire();
+    rs.forEach(function(r){
+      if(r.hasPhoto){ S.getPhoto(r.id).then(function(u){ if(u){ var el=document.querySelector('[data-thumb="'+r.id+'"]'); if(el){ el.style.backgroundImage='url('+u+')'; el.textContent=''; if(r.over21){ el.innerHTML='<span class="s21">21+</span>'; } } } }); }
+      if(r.paid && r.hasPickPhoto){ for(var i=0;i<3;i++){ (function(id,i){
+        if(!r.hasPickPhoto[i]) return;
+        S.getPickPhoto(id,i).then(function(u){ if(u){ var el=document.querySelector('[data-pickthumb="'+id+':'+i+'"]'); if(el){ el.style.backgroundImage='url('+u+')'; el.textContent=''; } } });
+      })(r.id,i); } }
+    });
+  }
+  function pickThumbsHtml(r){
+    var out='<div class="pickThumbs"><span class="lbl">Pick photos</span>';
+    for(var i=0;i<3;i++){
+      var has = r.hasPickPhoto && r.hasPickPhoto[i];
+      out+='<label class="pickThumbSm" data-pickthumb="'+r.id+':'+i+'">'+(has?'':(i+1))+'<input type="file" accept="image/*" data-pickphoto="'+r.id+':'+i+'"></label>';
+    }
+    return out+'</div>';
+  }
+  function reloadList(){ return S.adminList(adminPw).then(function(res){ if(res.ok){ all=res.restaurants; render(); } return res; }); }
+  function wire(){
+    document.querySelectorAll('[data-photo]').forEach(function(el){ el.onchange=function(e){ var id=+el.getAttribute('data-photo'), f=e.target.files[0]; if(!f) return;
+      S.fileToDataUrl(f).then(function(url){ return S.adminPhoto(adminPw,id,url); }).then(function(res){ toast(res.ok?'Photo uploaded':'Upload failed'); reloadList(); }).catch(function(){toast('Could not read image');}); }; });
+    document.querySelectorAll('[data-rmphoto]').forEach(function(el){ el.onclick=function(){ var id=+el.getAttribute('data-rmphoto'); S.adminRemovePhoto(adminPw,id).then(function(){ toast('Photo removed'); reloadList(); }); }; });
+    document.querySelectorAll('[data-pickphoto]').forEach(function(el){ el.onchange=function(e){
+      var parts=el.getAttribute('data-pickphoto').split(':'), id=+parts[0], i=+parts[1], f=e.target.files[0]; if(!f) return;
+      S.fileToDataUrl(f).then(function(url){ return S.adminPickPhoto(adminPw,id,i,url); }).then(function(res){ toast(res.ok?'Pick photo uploaded':'Upload failed'); reloadList(); }).catch(function(){toast('Could not read image');});
+    }; });
+    document.querySelectorAll('[data-claim]').forEach(function(el){ el.onclick=function(){ var id=+el.getAttribute('data-claim'), r=all.filter(function(x){return x.id===id;})[0]; S.adminSetFlag(adminPw,id,{claimed:!r.claimed}).then(function(){ reloadList(); }); }; });
+    document.querySelectorAll('[data-paid]').forEach(function(el){ el.onclick=function(){ var id=+el.getAttribute('data-paid'), r=all.filter(function(x){return x.id===id;})[0]; S.adminSetFlag(adminPw,id,{paid:!r.paid}).then(function(){ reloadList(); }); }; });
+    document.querySelectorAll('[data-rmpw]').forEach(function(el){ el.onclick=function(){ var id=+el.getAttribute('data-rmpw'); S.adminResetPassword(adminPw,id).then(function(res){ toast(res.ok?'Password reset to default':'Reset failed'); reloadList(); }); }; });
+    document.querySelectorAll('[data-copytag]').forEach(function(el){ el.onclick=function(){
+      var url=el.getAttribute('data-copytag');
+      if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(url).then(function(){ toast('Link copied'); }).catch(function(){ prompt('Copy this link:', url); }); }
+      else { prompt('Copy this link:', url); }
+    }; });
+  }
+
+  function enter(){
+    adminPw=$('#adminPw').value;
+    S.adminList(adminPw).then(function(res){
+      if(res.ok){ all=res.restaurants; $('#gate').style.display='none'; $('#panel').style.display='block';
+        $('#modeNote').innerHTML = S.isServer()
+          ? 'Shared database is <b>attached</b> — photo uploads and flags apply for every visitor.'
+          : 'No database attached yet — changes here affect <b>this browser only</b>. Attach storage in Vercel (see README) to go shared.';
+        render();
+      } else { $('#gateErr').style.display='block'; }
+    });
+  }
+
+  $('#adminGo').onclick=enter;
+  $('#adminPw').addEventListener('keydown',function(e){if(e.key==='Enter')enter();});
+  $('#search').addEventListener('input',render);
+  $('#resetAll').onclick=function(){ if(confirm('Reset all venues, photos, ratings and edits to defaults?')){ S.adminReset(adminPw).then(function(){ toast('Reset'); reloadList(); }); } };
+
+  S.init().then(render); // detect mode early (render no-op until authed)
+})();
+</script>
+<script defer src="https://cdn.vercel-insights.com/v1/script.js"></script>
+</body>
+</html>
