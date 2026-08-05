@@ -1,0 +1,10 @@
+{
+  "name": "drinkminot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DrinkMinot — verified local bar, bottle shop & coffee ratings for Minot, ND (twin of EatMinot)",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
+  }
+}

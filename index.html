@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#151226">
+<title>DrinkMinot — Tap. Rate. Earn. Zero tracking.</title>
+<style>
+  :root{
+    --bg:#151226; --ink:#F3EFFA; --muted:#9A93B4; --faint:#6E6790;
+    --card:#211C3B; --cream:#2A2448; --accent:#C6A15B; --line:rgba(255,255,255,0.08);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;position:fixed;inset:0;width:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;-webkit-user-select:none;user-select:none;
+  }
+  a{color:var(--accent);text-decoration:none}
+  button{font-family:inherit}
+  .app{max-width:520px;margin:0 auto;height:100%;display:flex;flex-direction:column}
+
+  .top{display:flex;align-items:center;justify-content:space-between;padding:12px 18px 2px;flex:none}
+  .brand{font-size:20px;font-weight:800;letter-spacing:-0.02em}
+  .brand span{color:var(--accent)}
+  .ownerlink{border:none;background:none;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;padding:8px}
+  .tagline{padding:0 18px 6px;font-size:10.5px;font-weight:800;letter-spacing:0.04em;color:var(--faint);text-transform:uppercase;flex:none}
+
+  /* Carousel — horizontal Rolodex only, no vertical scroll anywhere */
+  .stage{flex:1 1 auto;min-height:0;position:relative;overflow:hidden;padding:2px 4px 4px;touch-action:none;cursor:grab}
+  .stage:active{cursor:grabbing}
+  /* Tag/detail page reuses .stage's flex sizing but scrolls natively — its content
+     (address, billboard, coupon, etc.) can run taller than one screen. */
+  #tagStage{overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;cursor:auto}
+  .track{display:flex;height:100%;will-change:transform}
+  .track.noanim,.track.noanim .slide{transition:none!important}
+  .slide{flex:0 0 86%;height:100%;padding:0 6px;transition:transform .4s cubic-bezier(.22,.61,.36,1),opacity .4s;transform-origin:center center}
+  .card{background:var(--card);border-radius:18px;border:1px solid var(--line);
+    box-shadow:0 14px 40px rgba(0,0,0,0.35);overflow:hidden;display:flex;flex-direction:column;height:100%}
+  /* Tag/detail page card: grow past 100% instead of clipping when content is tall. */
+  .card.tall{height:auto;min-height:100%}
+  .hero{position:relative;width:100%;flex:none;height:clamp(140px,32vh,290px);background:#2A2448 center/cover no-repeat}
+  .stats{position:absolute;left:14px;bottom:12px;display:flex;align-items:baseline;gap:8px;pointer-events:none;text-shadow:0 1px 8px rgba(0,0,0,.6)}
+  .stats b{font-size:40px;font-weight:800;color:rgba(255,255,255,.95);letter-spacing:-.02em;line-height:1}
+  .stats s{font-size:13px;font-weight:700;color:rgba(255,255,255,.85);text-decoration:none}
+  .starsrow{position:absolute;right:14px;bottom:16px;display:flex;gap:2px;pointer-events:none}
+  /* 21+ sticker — the small round "must be 21" mark shown on every bar / alcohol
+     establishment (over21). It sits in the hero's top-left "thumbnail spot". */
+  .sticker21{position:absolute;left:12px;top:12px;width:44px;height:44px;border-radius:50%;
+    background:#0c0a16;color:#fff;border:2px solid var(--accent);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;line-height:1;transform:rotate(-9deg);
+    box-shadow:0 3px 10px rgba(0,0,0,.5);z-index:2}
+  .sticker21 b{font-size:16px;font-weight:900;letter-spacing:-.03em;color:var(--accent)}
+  .sticker21 i{font-size:6.5px;font-weight:800;font-style:normal;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.75)}
+  /* Claim badge normally lives top-left; when a 21+ sticker is present it shifts right
+     so the two never overlap (see the has21 modifier applied in JS). */
+  .badge-claim{position:absolute;left:14px;top:14px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;font-weight:800;letter-spacing:.02em;padding:5px 9px;border-radius:20px;z-index:2}
+  .badge-claim.has21{left:64px;top:20px}
+  .neon{position:absolute;right:12px;top:12px;display:flex;align-items:center;gap:6px;
+    background:rgba(10,10,12,.62);border:1px solid #39FF14;border-radius:20px;padding:5px 10px;
+    color:#B6FFB0;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+    box-shadow:0 0 8px #39FF14,0 0 18px rgba(57,255,20,.55),inset 0 0 6px rgba(57,255,20,.4);
+    text-shadow:0 0 6px #39FF14;animation:neonpulse 1.5s ease-in-out infinite;z-index:2}
+  .neon .d{width:8px;height:8px;border-radius:50%;background:#39FF14;box-shadow:0 0 6px #39FF14,0 0 12px #39FF14}
+  @keyframes neonpulse{0%,100%{opacity:1}50%{opacity:.62}}
+  @media (prefers-reduced-motion:reduce){.neon{animation:none}}
+
+  .body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:11px;padding:14px 16px 16px;overflow:hidden}
+  .body.lean{justify-content:center;gap:22px}
+  .body.full{overflow:visible}
+  .body.lean .row{background:none;padding:0}
+  .body.lean .num{font-size:26px}
+  .tapHint{font-size:11.5px;font-weight:700;color:var(--accent);text-align:center}
+  .paidTeaser{display:flex;flex-direction:column;gap:8px}
+  .ptItem{background:var(--cream);border-radius:10px;padding:9px 12px;font-size:13px;color:var(--ink);line-height:1.4}
+  .ptItem.hh{background:rgba(57,255,20,.10);border:1px solid rgba(57,255,20,.28)}
+  .ptLbl{display:block;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+  .ptItem.hh .ptLbl{color:#7CE05C}
+  .catrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:7px}
+  .cat{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);background:rgba(198,161,91,.14);border:1px solid rgba(198,161,91,.32);padding:3px 8px;border-radius:20px}
+  /* "Also on EatMinot" — flags a place that's cross-listed on the twin food site.
+     Styled in EatMinot's orange so the link between the two sites reads instantly. */
+  .eatlink{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:#E8703F;background:rgba(213,87,43,.14);border:1px solid rgba(213,87,43,.34);padding:3px 8px;border-radius:20px}
+  .title{font-size:21px;font-weight:800;letter-spacing:-.01em}
+  .meta{font-size:13px;color:var(--muted);margin-top:3px;line-height:1.4}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--cream);border-radius:12px;padding:11px 14px}
+  .lbl{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.02em;text-transform:uppercase}
+  .num{font-size:20px;font-weight:800;margin-top:2px}
+  .ticks{display:flex;gap:3px;margin-top:6px;justify-content:flex-end}
+  .tick{width:4px;height:14px;border-radius:2px;background:rgba(255,255,255,.14)}
+  .tick.on{background:var(--accent)}
+
+  .hhbar{display:flex;align-items:center;justify-content:space-between;gap:10px;border-radius:12px;padding:10px 13px;
+    background:#0c0c0e;color:#CFFFC7;border:1px solid #39FF14;box-shadow:0 0 10px rgba(57,255,20,.4)}
+  .hhbar .t{font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;text-shadow:0 0 6px #39FF14}
+  .hhbar .s{font-size:12px;color:#CFFFC7;opacity:.85}
+
+  .pcWrap{display:flex;flex-direction:column;gap:9px}
+  .pcLabel{font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+  .pcStage{position:relative;height:160px;overflow:hidden;touch-action:none;cursor:grab}
+  .pcStage:active{cursor:grabbing}
+  .pcTrack{display:flex;height:100%;will-change:transform}
+  .pcTrack.noanim,.pcTrack.noanim .pcSlide{transition:none!important}
+  .pcSlide{flex:0 0 78%;height:100%;padding:0 5px;transition:transform .35s cubic-bezier(.22,.61,.36,1),opacity .35s;transform-origin:center center}
+  .pcCard{background:linear-gradient(135deg,#2c2350,#3d2f63);border-radius:12px;overflow:hidden;height:100%;display:flex;flex-direction:column;position:relative}
+  .pcPhoto{flex:1;background:#3d2f63 center/cover no-repeat;display:flex;align-items:center;justify-content:center;min-height:0}
+  .pcPh{font-size:10px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.06em}
+  .pcText{flex:none;padding:8px 10px;font-size:12.5px;font-weight:700;color:#fff;background:rgba(0,0,0,.3);line-height:1.3}
+  .pcDots{display:flex;justify-content:center;gap:5px}
+  .pcDot{width:5px;height:5px;border-radius:3px;background:rgba(255,255,255,.2)}
+  .pcDot.on{background:var(--accent);width:13px}
+  .coupon{padding:11px 14px;background:rgba(57,255,20,.10);border:1px solid rgba(57,255,20,.34);border-radius:12px;display:flex;align-items:center;justify-content:space-between}
+
+  .foot{flex:none;padding:6px 18px calc(12px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px}
+  .dots{display:flex;justify-content:center;gap:5px;flex-wrap:wrap;max-height:22px;overflow:hidden}
+  .dot{width:6px;height:6px;border-radius:3px;background:rgba(255,255,255,.18)}
+  .dot.on{background:var(--accent);width:16px}
+  .btn{border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:800;cursor:pointer}
+  .btn.dark{background:#0c0a16;color:#fff}
+  .btn.accent{background:var(--accent);color:#1a1430}
+  .btn.ghost{background:none;color:var(--muted);font-weight:700}
+  .btn[disabled]{opacity:.45;cursor:default}
+  .hint{font-size:10.5px;color:var(--faint);text-align:center;font-weight:700}
+  .navbtns{position:absolute;top:0;bottom:0;display:flex;align-items:center;z-index:3;pointer-events:none}
+  .navbtns.l{left:2px}.navbtns.r{right:2px}
+  .arrow{pointer-events:auto;border:none;background:rgba(255,255,255,.92);color:#1a1430;width:34px;height:34px;border-radius:50%;
+    box-shadow:0 4px 14px rgba(0,0,0,.35);font-size:17px;font-weight:800;cursor:pointer;display:none}
+  @media(hover:hover){.arrow{display:block}}
+
+  .ovl{position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+  .ovl .x{position:absolute;top:16px;right:16px;border:none;background:rgba(255,255,255,.2);color:#fff;width:34px;height:34px;border-radius:50%;font-size:16px;cursor:pointer}
+  .ovl .rn{font-size:22px;font-weight:800;color:#fff;margin-bottom:34px}
+  .thumb{border:none;background:none;cursor:pointer;padding:6px}
+  .starbtns{display:flex;gap:8px;cursor:pointer;margin-top:26px}
+  .ohint{font-size:12px;color:rgba(255,255,255,.85);font-weight:700;margin-top:24px}
+  .skip{margin-top:16px;border:none;background:none;color:rgba(255,255,255,.92);font-size:12px;font-weight:800;text-decoration:underline;cursor:pointer}
+  .punch{position:relative;width:220px;height:220px;display:flex;align-items:center;justify-content:center}
+  .punch .p{position:relative;font-size:20px;font-weight:800;color:#fff;letter-spacing:.06em}
+
+  .screen{display:none;position:absolute;inset:0;background:var(--bg);flex-direction:column;z-index:10}
+  .screen.show{display:flex}
+  .shead{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);flex:none}
+  .shead .back{border:none;background:none;font-size:18px;color:var(--muted);cursor:pointer;padding:4px 6px}
+  .scroll{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:15px}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field > span{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.02em}
+  input[type=text],input[type=password],input[type=number],input[type=time],textarea,select{
+    border:1px solid var(--line);border-radius:9px;padding:11px 12px;font-size:16px;color:var(--ink);font-family:inherit;background:#1b1733}
+  textarea{resize:none}
+  .lock{position:relative}
+  .lock .veil{position:absolute;inset:-4px;border-radius:12px;background:rgba(21,18,38,.9);backdrop-filter:blur(2px);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;padding:12px}
+  .pill{font-size:11px;font-weight:800;color:#1a1430;background:var(--accent);border-radius:20px;padding:5px 10px}
+  .days{display:flex;gap:5px;flex-wrap:wrap}
+  .day{border:1px solid var(--line);background:#1b1733;border-radius:8px;padding:7px 0;width:38px;text-align:center;font-size:12px;font-weight:800;cursor:pointer;color:var(--muted)}
+  .day.on{background:var(--accent);color:#1a1430;border-color:var(--accent)}
+  .pickRow{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .pickRow input[type=text]{flex:1}
+  .pickPhotoBtn{flex:none;cursor:pointer}
+  .pickThumb{width:44px;height:44px;border-radius:8px;background:var(--cream) center/cover no-repeat;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase}
+  .note{background:rgba(198,161,91,.10);border:1px solid rgba(198,161,91,.3);color:#D8BE8A;border-radius:10px;padding:10px 12px;font-size:12px;font-weight:600;line-height:1.45}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0c0a16;color:#fff;font-size:13px;font-weight:700;padding:11px 16px;border-radius:22px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+
+  /* NFC/QR tag landing screen */
+  .ratedmsg{text-align:center;font-size:13px;font-weight:800;color:#7CE05C;padding:10px 0}
+  /* Resumable "Rate" pill on the home screen — shown for up to 2h after a real tag
+     tap, so browsing away from the tag page (e.g. to compare other places) doesn't
+     lose the ability to rate without finding the tag again. */
+  .resumeBtn{width:100%;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+
+  /* Auto-fit tiers for the tag/detail page — fitTagCard() in JS measures the card
+     against the visible stage and steps down through these until content fits
+     without scrolling. #tagStage keeps overflow-y:auto as a fallback for the rare
+     case content still doesn't fit even at .tight — nothing is ever clipped. */
+  .tall.compact .hero{height:clamp(108px,24vh,210px)}
+  .tall.compact .body{gap:8px;padding:10px 14px 12px}
+  .tall.compact .catrow{margin-bottom:5px}
+  .tall.compact .title{font-size:19px}
+  .tall.compact .meta{font-size:12px}
+  .tall.compact .row{padding:9px 12px}
+  .tall.compact .num{font-size:17px}
+  .tall.compact .lbl{font-size:10px}
+  .tall.compact .hhbar{padding:8px 11px}
+  .tall.compact .hhbar .t,.tall.compact .hhbar .s{font-size:11px}
+  .tall.compact .pcWrap{gap:7px}
+  .tall.compact .pcLabel{font-size:10px}
+  .tall.compact .pcStage{height:120px}
+  .tall.compact .pcText{padding:7px 9px;font-size:11.5px}
+  .tall.compact .coupon{padding:9px 12px}
+
+  .tall.tight .hero{height:clamp(84px,16vh,150px)}
+  .tall.tight .body{gap:6px;padding:8px 12px 10px}
+  .tall.tight .cat{font-size:9px;padding:2px 7px}
+  .tall.tight .catrow{margin-bottom:4px}
+  .tall.tight .title{font-size:16.5px}
+  .tall.tight .meta{font-size:11px}
+  .tall.tight .row{padding:7px 10px}
+  .tall.tight .num{font-size:15px}
+  .tall.tight .lbl{font-size:9.5px}
+  .tall.tight .hhbar{padding:6px 9px}
+  .tall.tight .hhbar .t,.tall.tight .hhbar .s{font-size:10.5px}
+  .tall.tight .pcWrap{gap:5px}
+  .tall.tight .pcLabel{font-size:9.5px}
+  .tall.tight .pcStage{height:88px}
+  .tall.tight .pcText{padding:5px 8px;font-size:10.5px}
+  .tall.tight .coupon{padding:7px 10px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="brand">Drink<span>Minot</span></div>
+    <button class="ownerlink" id="ownerLink">Owner login</button>
+  </div>
+  <div class="tagline">Tap · Rate · Earn — Zero tracking. Period.</div>
+  <div class="stage" id="stage">
+    <div class="navbtns l"><button class="arrow" id="prev">‹</button></div>
+    <div class="navbtns r"><button class="arrow" id="next">›</button></div>
+    <div class="track" id="track"></div>
+  </div>
+  <div class="foot">
+    <div id="resumeWrap"></div>
+    <div class="dots" id="dots"></div>
+    <div class="hint">Find our NFC tag or QR code in-store to rate — tap it, then tap Rate</div>
+  </div>
+
+  <!-- NFC / QR TAG LANDING -->
+  <div class="screen" id="tag">
+    <div class="top">
+      <div class="brand">Drink<span>Minot</span></div>
+      <button class="ownerlink" id="tagBrowse">Browse all →</button>
+    </div>
+    <div class="stage" id="tagStage">
+      <div id="tagCardHost" style="width:100%;min-height:100%"></div>
+    </div>
+    <div class="foot" id="tagFootWrap">
+      <div id="tagFoot"></div>
+    </div>
+  </div>
+
+  <!-- OWNER LOGIN -->
+  <div class="screen" id="login">
+    <div class="shead"><button class="back" data-home>←</button><b>Owner login</b></div>
+    <div class="scroll">
+      <div class="note">Default password is your venue name (letters only) + <b>26</b>, e.g. <b>capribar26</b>. Change it once you're in.</div>
+      <label class="field"><span>Venue</span><select id="loginPick"></select></label>
+      <label class="field"><span>Password</span><input type="password" id="loginPw" placeholder="name + 26" autocomplete="off"></label>
+      <button class="btn accent" id="loginBtn">Log in</button>
+      <div id="loginErr" style="color:#F0866B;font-size:13px;font-weight:700;display:none">Wrong password. Try your name (letters only) + 26.</div>
+      <div class="note">Need your password? Email <a href="mailto:cody@drinkminot.com">cody@drinkminot.com</a>.</div>
+    </div>
+  </div>
+
+  <!-- OWNER DASHBOARD -->
+  <div class="screen" id="dash">
+    <div class="shead"><button class="back" data-home>←</button><div><b id="dashName">Owner</b><div class="lbl" id="dashTier" style="text-transform:none"></div></div></div>
+    <div class="scroll" id="dashScroll"></div>
+  </div>
+</div>
+
+<div id="overlayHost"></div>
+<div class="toast" id="toast"></div>
+
+<script src="./store.js"></script>
+<script>
+(function(){
+  'use strict';
+  var S = window.DrinkStore;
+  var STAR = "M10 1.2l2.6 5.4 5.9.9-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.2 5.9-.9z";
+  var BURST = "M50 0l6 28 22-18-10 27 30-4-27 14 27 14-30-4 10 27-22-18-6 28-6-28-22 18 10-27-30 4 27-14-27-14 30 4-10-27 22 18z";
+  var $ = function(s,el){return (el||document).querySelector(s);};
+  var index = 0;
+  var restaurants = [];
+  function cur(){ return restaurants[index]; }
+  function vibrate(ms){ if(navigator.vibrate){ try{ navigator.vibrate(ms||10); }catch(e){} } }
+  function toast(m){ var t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(function(){t.classList.remove('show');},1700); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+  function starsSvg(rating,size){
+    var out='';
+    for(var i=0;i<5;i++){ var f=i<Math.round(rating)?'rgba(255,255,255,.95)':'rgba(255,255,255,.35)'; out+='<svg width="'+size+'" height="'+size+'" viewBox="0 0 20 20" style="opacity:.9"><path d="'+STAR+'" fill="'+f+'"></path></svg>'; }
+    return out;
+  }
+  // The 21+ sticker for bars / alcohol establishments — its own small "thumbnail spot"
+  // in the hero. Only rendered when the venue is flagged over21 in the frozen list.
+  function sticker21(r){ return r.over21 ? '<div class="sticker21"><b>21+</b><i>only</i></div>' : ''; }
+  // "Also on EatMinot" cross-listing pill — shown when the same place appears on the
+  // twin food site so people know where else to find it (and rate it).
+  function eatPill(r){ return r.alsoOnEat ? '<span class="eatlink">🍔 Also on EatMinot</span>' : ''; }
+  function catRow(r){
+    var bits = (r.category ? '<span class="cat">'+esc(r.category)+'</span>' : '') + eatPill(r);
+    return bits ? '<div class="catrow">'+bits+'</div>' : '';
+  }
+
+  // Lean Rolodex teaser — name, hours, happy-hour cue, and ratings only. Everything
+  // else (address, billboard, punch progress, coupon) lives on that venue's
+  // NFC/QR detail page (detailInner, below) — reached only by tapping their tag.
+  function rolodexInner(r){
+    var happy = S.isHappyHourNow(r);
+    var neon = happy ? '<div class="neon"><span class="d"></span>Happy Hour</div>' : '';
+    var claim = r.claimed ? '<div class="badge-claim'+(r.over21?' has21':'')+'">CLAIMED</div>' : '';
+    // Paid gets a taste on the Rolodex card itself: their first special, and the
+    // happy-hour offer text while it's active (the neon badge above already flags
+    // *that* happy hour is on — this shows what it actually is). Tapping the card
+    // still opens the full page with all three picks — see openPaidPreview().
+    var teaser = '';
+    if(r.paid){
+      var bits = [];
+      if(r.picks && r.picks[0] && r.picks[0].trim()) bits.push('<div class="ptItem"><span class="ptLbl">Special</span>'+esc(r.picks[0])+'</div>');
+      if(happy && r.happyHour && r.happyHour.special) bits.push('<div class="ptItem hh"><span class="ptLbl">⚡ Happy hour</span>'+esc(r.happyHour.special)+'</div>');
+      if(bits.length) teaser = '<div class="paidTeaser">'+bits.join('')+'</div>';
+    }
+    var tapHint = r.paid ? '<div class="tapHint">Tap to see all picks →</div>' : '';
+    return '<div class="hero" data-hero="'+r.id+'">'+
+        '<div class="stats"><b>'+S.fmtNum(r.upvotes)+'</b><s>upvotes</s></div>'+
+        '<div class="starsrow">'+starsSvg(r.rating,18)+'</div>'+sticker21(r)+claim+neon+
+      '</div>'+
+      '<div class="body lean">'+
+        '<div>'+catRow(r)+'<div class="title">'+esc(r.name)+'</div><div class="meta">'+esc(r.hours)+'</div></div>'+
+        teaser+
+        '<div class="row"><div><div class="lbl">Verified ratings</div><div class="num">'+r.totalRatings+'</div></div></div>'+
+        tapHint+
+      '</div>';
+  }
+  // Full hero+body markup for the standalone NFC/QR tag-landing page — everything the
+  // Rolodex card leaves out: address, House Picks billboard, happy-hour special,
+  // punch-card progress, and any earned coupon.
+  function detailInner(r){
+    var rec = S.deviceRec(r.id);
+    var happy = S.isHappyHourNow(r);
+    var neon = happy ? '<div class="neon"><span class="d"></span>Happy Hour</div>' : '';
+    var claim = r.claimed ? '<div class="badge-claim'+(r.over21?' has21':'')+'">CLAIMED</div>' : '';
+    // Billboard + happy-hour special are PAID extras only; nothing shown on free boards.
+    // The 3 picks render as their own floating photo carousel — see pcOnDown/initPickCarousel.
+    var picks = (r.paid && r.picks) ? r.picks.filter(function(p){return p&&p.trim();}) : [];
+    var billboard = picks.length ? '<div class="pcWrap"><div class="pcLabel">★ House Picks</div>'+
+      '<div class="pcStage" id="pcStage"><div class="pcTrack" id="pcTrack">'+
+      r.picks.map(function(p,i){ return (p&&p.trim()) ? '<div class="pcSlide"><div class="pcCard"><div class="pcPhoto" data-pickphoto="'+r.id+':'+i+'"><div class="pcPh">Photo</div></div><div class="pcText">'+esc(p)+'</div></div></div>' : ''; }).join('')+
+      '</div></div><div class="pcDots" id="pcDots"></div></div>' : '';
+    var hhbar = (r.paid && happy) ? '<div class="hhbar"><div class="t">⚡ Happy hour now</div><div class="s">'+esc(r.happyHour.special||'')+' · til '+S.to12h(r.happyHour.end)+'</div></div>' : '';
+    var ticks='';
+    for(var i=0;i<(rec.total||10);i++){ ticks+='<div class="tick'+(i<rec.done?' on':'')+'"></div>'; }
+    var couponActive = rec.coupon && rec.coupon.expiresAt>Date.now();
+    var coupon = couponActive ? '<div class="coupon"><div><div style="font-size:12px;font-weight:800;color:#7CE05C">'+esc(rec.coupon.reward||'Reward earned!')+'</div><div style="font-size:11px;color:#9FE88C;font-weight:700;margin-top:2px">Code '+esc(rec.coupon.code)+' · exp '+new Date(rec.coupon.expiresAt).toLocaleDateString(undefined,{month:'short',day:'numeric'})+'</div></div><div style="font-size:10px;font-weight:800;color:#1a1430;background:#7CE05C;padding:5px 9px;border-radius:20px">EARNED</div></div>' : '';
+
+    return '<div class="hero" data-hero="'+r.id+'">'+
+        '<div class="stats"><b>'+S.fmtNum(r.upvotes)+'</b><s>upvotes</s></div>'+
+        '<div class="starsrow">'+starsSvg(r.rating,18)+'</div>'+sticker21(r)+claim+neon+
+      '</div>'+
+      '<div class="body full">'+
+        '<div>'+catRow(r)+'<div class="title">'+esc(r.name)+'</div><div class="meta">'+esc(r.address)+' · '+esc(r.hours)+'</div></div>'+
+        hhbar+
+        '<div class="row"><div><div class="lbl">Verified ratings</div><div class="num">'+r.totalRatings+'</div></div>'+
+          '<div style="text-align:right"><div class="lbl">Your punches</div><div class="ticks">'+ticks+'</div>'+
+          '<div class="lbl" style="text-transform:none;margin-top:4px">'+rec.done+'/'+(rec.total||10)+'</div></div></div>'+
+        billboard+coupon+
+      '</div>';
+  }
+  function cardHtml(r){ return '<div class="slide"><div class="card">'+rolodexInner(r)+'</div></div>'; }
+  function tagCardHtml(r){ return '<div class="card tall">'+detailInner(r)+'</div>'; }
+
+  function loadHeroes(){
+    document.querySelectorAll('[data-hero]').forEach(function(el){
+      var id=parseInt(el.getAttribute('data-hero'),10);
+      S.getPhoto(id).then(function(url){ if(url) el.style.backgroundImage='url('+url+')'; });
+    });
+  }
+  function loadPickPhotos(){
+    document.querySelectorAll('[data-pickphoto]').forEach(function(el){
+      var parts=el.getAttribute('data-pickphoto').split(':'), id=parseInt(parts[0],10), i=parseInt(parts[1],10);
+      S.getPickPhoto(id,i).then(function(url){ if(url){ el.style.backgroundImage='url('+url+')'; el.innerHTML=''; } });
+    });
+  }
+  function renderTrack(){
+    $('#track').innerHTML = restaurants.map(cardHtml).join('');
+    renderDots(); layout(true); loadHeroes(); renderResumeBar();
+  }
+  // Resumable "Rate <name> now →" pill: shown on the home screen for up to 2h after
+  // a real tag tap (S.recordTap in enterTagMode), so browsing away mid-visit doesn't
+  // strand the customer without a way back to rating short of re-finding the tag.
+  function renderResumeBar(){
+    var host=$('#resumeWrap'); if(!host) return;
+    var p=S.pendingTap(), r=p&&S.get(p.id);
+    if(!r){ host.innerHTML=''; return; }
+    host.innerHTML='<button class="btn accent resumeBtn" id="resumeBtn">Rate '+esc(r.name)+' now<span>→</span></button>';
+    $('#resumeBtn').onclick=function(){ enterTagMode(r.id); };
+  }
+  function renderDots(){
+    var d=''; for(var i=0;i<restaurants.length;i++){ d+='<div class="dot'+(i===index?' on':'')+'"></div>'; }
+    $('#dots').innerHTML=d;
+  }
+
+  /* ---------- horizontal Rolodex ---------- */
+  var track, stage, dragging=false, startX=0, startY=0, baseX=0, curX=0, axis=null, stageW=0, slideW=0, movedAbs=0;
+  var vx=0, lastMoveX=0, lastMoveT=0, dragTick=0, raf=0;
+  // offsetWidth is the LAYOUT width (ignores the scale transform) so centring stays exact.
+  // Exact fractional slide width (must match the .slide flex-basis below) so centring
+  // stays pixel-perfect across all cards — integer offsetWidth would drift as index grows.
+  var SLIDE_PCT=0.86;
+  function measure(){ stageW=track.clientWidth||stage.clientWidth; slideW = stageW*SLIDE_PCT || stageW; }
+  function center0(){ return stageW/2 - slideW/2; }
+  function centerBase(i){ return center0() - i*slideW; }
+  function idxAt(X){ return (center0()-X)/slideW; }
+  function clampT(t){ var min=centerBase(restaurants.length-1), max=centerBase(0); if(t>max) return max+(t-max)*0.3; if(t<min) return min+(t-min)*0.3; return t; }
+  // Scale + dim neighbours by distance from centre — the Rolodex look.
+  function updateVisual(T){
+    var s=track.children;
+    for(var i=0;i<s.length;i++){
+      var onC=T + i*slideW + slideW/2, dist=Math.abs(onC-stageW/2)/slideW;
+      if(dist>2.2){ s[i].style.transform='scale(.86)'; s[i].style.opacity='.4'; continue; }
+      var k=Math.min(dist,1);
+      s[i].style.transform='scale('+(1-0.12*k).toFixed(3)+')';
+      s[i].style.opacity=(1-0.5*k).toFixed(3);
+    }
+  }
+  function apply(T){ curX=T; track.style.transform='translate3d('+T+'px,0,0)'; updateVisual(T); }
+  function tick(){ vibrate(18); }          // haptic "click" as a card passes centre
+  function layout(instant){
+    measure();
+    if(instant) track.classList.add('noanim');
+    apply(centerBase(index));
+    if(instant){ void track.offsetWidth; track.classList.remove('noanim'); }
+  }
+  // Animate to a card with our own rAF so we can fire a click as each one passes.
+  function animateTo(to){
+    to=Math.max(0,Math.min(restaurants.length-1,to));
+    if(raf){ cancelAnimationFrame(raf); raf=0; }
+    var sx=curX, tx=centerBase(to), dist=Math.abs(to-index);
+    if(dist===0 && Math.abs(sx-tx)<0.5){ apply(tx); return; }
+    var dur=Math.min(760, 240+95*dist), t0=performance.now(), lastCross=Math.round(idxAt(sx));
+    track.classList.add('noanim');
+    function frame(now){
+      var p=Math.min(1,(now-t0)/dur), e=1-Math.pow(1-p,3), x=sx+(tx-sx)*e;
+      apply(x);
+      var ci=Math.round(idxAt(x));
+      if(ci!==lastCross){ lastCross=ci; tick(); }
+      if(p<1){ raf=requestAnimationFrame(frame); }
+      else { index=to; apply(tx); track.classList.remove('noanim'); renderDots(); raf=0; }
+    }
+    raf=requestAnimationFrame(frame);
+  }
+  function snap(to){ animateTo(to); }
+  function onDown(e){
+    if(document.querySelector('.ovl')) return;
+    if(raf){ cancelAnimationFrame(raf); raf=0; }
+    measure(); dragging=true; axis=null; startX=e.clientX; startY=e.clientY; baseX=curX; movedAbs=0;
+    vx=0; lastMoveX=e.clientX; lastMoveT=performance.now(); dragTick=Math.round(idxAt(curX));
+    track.classList.add('noanim');
+  }
+  function onMove(e){
+    if(!dragging) return;
+    var dx=e.clientX-startX, dy=e.clientY-startY;
+    if(axis==null){ if(Math.abs(dx)>4||Math.abs(dy)>4) axis = Math.abs(dx)>=Math.abs(dy)?'x':'y'; else return; }
+    if(axis==='y') return;                 // vertical gestures do nothing
+    movedAbs=Math.max(movedAbs,Math.abs(dx));
+    var now=performance.now(), dt=now-lastMoveT;
+    if(dt>0){ vx=0.75*vx + 0.25*(e.clientX-lastMoveX)/dt; lastMoveX=e.clientX; lastMoveT=now; }
+    var T=clampT(baseX+dx); apply(T);
+    var ci=Math.round(idxAt(T));
+    if(ci!==dragTick){ dragTick=ci; tick(); }   // click each card as you drag past it
+  }
+  function onUp(e){
+    if(!dragging) return; dragging=false;
+    if(axis==='y'){ animateTo(index); return; }
+    var target;
+    if(movedAbs<8){                        // a tap: tap a side card to centre it
+      var rx=(e.clientX!=null?e.clientX:startX)-stage.getBoundingClientRect().left;
+      if(rx < stageW*0.4) target=index-1;
+      else if(rx > stageW*0.6) target=index+1;
+      else {
+        // tap on the already-centred card: Paid opens a view-only preview of their full page
+        var r=cur();
+        if(r && r.paid) openPaidPreview(r.id);
+        else animateTo(index);
+        return;
+      }
+    } else {
+      // momentum: project position by fling velocity so one fast swipe crosses several cards
+      var projected=curX + vx*170;
+      target=Math.round(idxAt(projected));
+      if(Math.abs(target-index)>8) target=index+(target>index?8:-8);
+    }
+    animateTo(target);
+  }
+
+  /* ---------- rating overlay ---------- */
+  var ov=null;
+  function openOverlay(){ var r=cur(); if(!r||S.ratedRecently(r.id)) return; ov={step:'ready',rating:0,upvote:false}; drawOverlay(); }
+  function drawOverlay(){
+    var r=cur(), accent=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#C6A15B', host=$('#overlayHost');
+    if(ov.step==='confirmed'){
+      host.innerHTML='<div class="ovl" style="background:'+accent+'ee"><div class="punch"><svg width="220" height="220" viewBox="0 0 100 100" style="position:absolute;inset:0"><path d="'+BURST+'" fill="#1a1430"></path></svg><div class="p">PUNCHED</div></div></div>';
+      return;
+    }
+    var showName = ov.step==='ready'||ov.step==='selected';
+    var thumbFill = ov.upvote?'#fff':'rgba(255,255,255,.5)';
+    var starsHtml=''; for(var i=0;i<5;i++){ var f=i<ov.rating?'#fff':'rgba(255,255,255,.32)'; starsHtml+='<svg width="40" height="40" viewBox="0 0 20 20"><path d="'+STAR+'" fill="'+f+'"></path></svg>'; }
+    var skip = (ov.step==='selected' && !ov.upvote) ? '<button class="skip" id="ovSkip">Submit stars only — no upvote</button>' : '';
+    host.innerHTML='<div class="ovl" id="ovBox" style="background:'+accent+'ee"><button class="x" id="ovX">✕</button>'+
+      (showName?'<div class="rn">'+esc(r.name)+'</div>':'')+
+      '<button class="thumb" id="ovThumb"><svg width="82" height="82" viewBox="0 0 24 24"><path d="M2 21h3V9H2v12zm19.83-11.06c.11-.25.17-.52.17-.8V8c0-1.1-.9-2-2-2h-5.5l.85-4.1.03-.32c0-.41-.17-.79-.44-1.06L13.83 0 7.41 6.41C7.05 6.78 6.83 7.28 6.83 7.83V19a2 2 0 002 2h9c.82 0 1.54-.5 1.84-1.22l3-7.06z" fill="'+thumbFill+'"></path></svg></button>'+
+      '<div class="starbtns" id="ovStars">'+starsHtml+'</div>'+
+      '<div class="ohint">'+(ov.upvote?'Now tap a star to finish':'Tap 👍 then a star — or just tap stars')+'</div>'+skip+
+      (ov.step==='ready'||ov.step==='selected'?'<div class="ohint" style="margin-top:10px;opacity:.6">Swipe down or tap ✕ to cancel</div>':'')+'</div>';
+    $('#ovX').onclick=closeOverlay; $('#ovThumb').onclick=tapThumb; $('#ovStars').onclick=tapStars;
+    if($('#ovSkip')) $('#ovSkip').onclick=function(){ confirmRate(ov.rating,false); };
+  }
+  function closeOverlay(){ ov=null; $('#overlayHost').innerHTML=''; }
+  // Swipe down anywhere on the open overlay cancels it — the reverse of the swipe-up
+  // that opened it, so an accidental trigger is just as easy to undo. Only cancelable
+  // before a rating is actually submitted (step 'ready'/'selected'); once confirmRate()
+  // has fired, the request is already in flight and this no longer applies.
+  var ovlDragging=false, ovlStartY=0, ovlDY=0;
+  function ovlOnDown(e){
+    if(!ov || (ov.step!=='ready' && ov.step!=='selected')) return;
+    ovlDragging=true; ovlStartY=e.clientY; ovlDY=0;
+  }
+  function ovlOnMove(e){
+    if(!ovlDragging) return;
+    ovlDY=Math.max(0,e.clientY-ovlStartY);
+    var box=$('#ovBox'); if(box) box.style.transform='translateY('+ovlDY+'px)';
+  }
+  function ovlOnUp(){
+    if(!ovlDragging) return; ovlDragging=false;
+    var box=$('#ovBox');
+    if(ovlDY>70){ vibrate(10); closeOverlay(); return; }
+    if(box){ box.style.transition='transform .18s ease'; box.style.transform=''; setTimeout(function(){ if(box) box.style.transition=''; },200); }
+    ovlDY=0;
+  }
+  function tapThumb(){ if(ov.step==='ready'){ ov.upvote=true; drawOverlay(); return; } if(ov.step==='selected'){ confirmRate(ov.rating,true); } }
+  function tapStars(e){
+    if(ov.step!=='ready'&&ov.step!=='selected') return;
+    var rect=e.currentTarget.getBoundingClientRect(), ratio=(e.clientX-rect.left)/rect.width;
+    var rating=Math.min(5,Math.max(1,Math.ceil(ratio*5)));
+    if(ov.step==='ready'&&ov.upvote){ ov.rating=rating; confirmRate(rating,true); }
+    else { ov.rating=rating; ov.step='selected'; drawOverlay(); }
+  }
+  function confirmRate(rating,upvote){
+    var r=cur(); if(!r) return;
+    ov.step='confirming'; drawOverlay();
+    S.rate(r.id, rating, upvote).then(function(res){
+      if(!res.ok){ closeOverlay(); toast(res.reason==='rate_limited'?'Already rated today':'Could not submit'); return; }
+      ov.step='confirmed'; drawOverlay();
+      setTimeout(function(){
+        closeOverlay(); restaurants=S.list(); renderTrack();
+        if($('#tag').classList.contains('show')) renderTagFoot();   // swap "swipe up" for the ✓ once rated
+      }, 1150);
+    });
+  }
+
+  /* ---------- NFC/QR tag landing (?r=<id>) + Paid tap-through preview ----------
+     tagVerified is the whole enforcement point: true only when this screen was reached
+     via a real ?r=<id> URL (an actual tag tap/QR scan) — that's what unlocks the Rate
+     button in renderTagFoot(). A Paid card tap in the Rolodex shows the exact same
+     screen with tagVerified=false — full info, no Rate button — so rating stays
+     reachable only by physically tapping the tag. A real tap also records a local
+     timestamp (S.recordTap) so the Rate button can resurface as a "Rate now →" pill
+     on the home screen for up to 2h, in case someone browses away mid-visit. */
+  var tagId = null, tagVerified = false;
+  function enterTagMode(id){
+    var idx = restaurants.findIndex(function(x){ return x.id===id; });
+    if(idx<0) return false;
+    tagId = id; tagVerified = true; index = idx; // reuse cur()/openOverlay()/confirmRate() unmodified
+    S.recordTap(id);
+    // Show the screen BEFORE rendering into it: fitTagCard()/pcMeasure() read layout
+    // (clientHeight/clientWidth), which is always 0 on a display:none ancestor —
+    // rendering first would silently measure nothing and skip straight to "it fits".
+    showScreen('tag');
+    renderTagScreen();
+    return true;
+  }
+  function openPaidPreview(id){
+    var idx = restaurants.findIndex(function(x){ return x.id===id; });
+    if(idx<0) return;
+    tagId = id; tagVerified = false; index = idx;
+    showScreen('tag');
+    renderTagScreen();
+  }
+  function renderTagScreen(){
+    var r = S.get(tagId); if(!r) return;
+    $('#tagCardHost').innerHTML = tagCardHtml(r);
+    loadHeroes();
+    loadPickPhotos();
+    renderTagFoot();   // must run before fitTagCard() — the foot's height (e.g. the
+                        // Rate button) eats into #tagStage's available space, so
+                        // fitting against it beforehand would fit against a taller
+                        // stage than the page will actually end up with.
+    fitTagCard();
+    initPickCarousel();
+  }
+  // Steps the card through progressively denser layouts (.compact, then .tight —
+  // see CSS) until its natural height fits the visible stage, so the page fits one
+  // screen on most devices without scrolling. Photos load in via background-image
+  // on already-sized boxes, so they never change these measurements after the fact.
+  var TAG_DENSITIES = ['', 'compact', 'tight'];
+  function fitTagCard(){
+    var stage=$('#tagStage'), card=stage&&stage.querySelector('.card'); if(!stage||!card) return;
+    var avail = stage.clientHeight;
+    for(var i=0;i<TAG_DENSITIES.length;i++){
+      card.className = 'card tall' + (TAG_DENSITIES[i]?' '+TAG_DENSITIES[i]:'');
+      if(card.scrollHeight <= avail) break;
+    }
+  }
+
+  /* ---------- floating 3-pick photo carousel, on the detail page only ----------
+     A small, self-contained horizontal carousel (peek/scale/dim, tap-to-centre,
+     drag-to-nearest), independent of the home Rolodex. pcOnDown stops the pointerdown
+     from bubbling to #tagStage so dragging a pick never triggers the vertical
+     swipe-up-to-rate gesture underneath it. */
+  var pcStage=null, pcTrack=null, pcIndex=0, pcDragging=false, pcStartX=0, pcBaseX=0, pcCurX=0, pcStageW=0, pcSlideW=0, pcMovedAbs=0;
+  var PC_SLIDE_PCT=0.78;
+  function pcMeasure(){ pcStageW = pcTrack ? pcTrack.clientWidth : 0; pcSlideW = pcStageW*PC_SLIDE_PCT || pcStageW; }
+  function pcCenter0(){ return pcStageW/2 - pcSlideW/2; }
+  function pcCenterBase(i){ return pcCenter0() - i*pcSlideW; }
+  function pcVisual(T){
+    var kids=pcTrack.children;
+    for(var i=0;i<kids.length;i++){
+      var onC=T+i*pcSlideW+pcSlideW/2, dist=Math.abs(onC-pcStageW/2)/pcSlideW, k=Math.min(dist,1);
+      kids[i].style.transform='scale('+(1-0.12*k).toFixed(3)+')';
+      kids[i].style.opacity=(1-0.55*k).toFixed(3);
+    }
+  }
+  function pcApply(T){ pcCurX=T; pcTrack.style.transform='translate3d('+T+'px,0,0)'; pcVisual(T); }
+  function pcLayout(instant){
+    pcMeasure();
+    if(instant) pcTrack.classList.add('noanim');
+    pcApply(pcCenterBase(pcIndex));
+    if(instant){ void pcTrack.offsetWidth; pcTrack.classList.remove('noanim'); }
+  }
+  function pcRenderDots(){
+    var host=$('#pcDots'); if(!host||!pcTrack) return;
+    var n=pcTrack.children.length, d='';
+    for(var i=0;i<n;i++){ d+='<div class="pcDot'+(i===pcIndex?' on':'')+'"></div>'; }
+    host.innerHTML=d;
+  }
+  function pcAnimateTo(to){
+    if(!pcTrack) return;
+    var n=pcTrack.children.length;
+    pcIndex=Math.max(0,Math.min(n-1,to));
+    pcTrack.classList.remove('noanim');
+    pcApply(pcCenterBase(pcIndex));
+    pcRenderDots();
+  }
+  function pcOnDown(e){
+    e.stopPropagation();
+    if(!pcTrack) return;
+    pcMeasure(); pcDragging=true; pcStartX=e.clientX; pcBaseX=pcCurX; pcMovedAbs=0;
+    pcTrack.classList.add('noanim');
+  }
+  function pcOnMove(e){
+    if(!pcDragging||!pcTrack) return;
+    var dx=e.clientX-pcStartX; pcMovedAbs=Math.max(pcMovedAbs,Math.abs(dx));
+    var n=pcTrack.children.length, min=pcCenterBase(n-1), max=pcCenterBase(0), t=pcBaseX+dx;
+    if(t>max) t=max+(t-max)*0.3; if(t<min) t=min+(t-min)*0.3;
+    pcApply(t);
+  }
+  function pcOnUp(e){
+    if(!pcDragging||!pcTrack) return; pcDragging=false;
+    pcTrack.classList.remove('noanim');
+    var target;
+    if(pcMovedAbs<8){
+      var rx=(e.clientX!=null?e.clientX:pcStartX)-pcStage.getBoundingClientRect().left;
+      if(rx<pcStageW*0.4) target=pcIndex-1; else if(rx>pcStageW*0.6) target=pcIndex+1; else { pcAnimateTo(pcIndex); return; }
+    } else {
+      target=Math.round((pcCenter0()-pcCurX)/pcSlideW);
+    }
+    vibrate(10);
+    pcAnimateTo(target);
+  }
+  function initPickCarousel(){
+    pcStage=$('#pcStage'); pcTrack=$('#pcTrack');
+    if(!pcTrack){ pcStage=null; return; }
+    pcIndex=0; pcDragging=false;
+    pcLayout(true); pcRenderDots();
+    pcStage.addEventListener('pointerdown',pcOnDown);
+  }
+  function renderTagFoot(){
+    var r = S.get(tagId); if(!r) return;
+    var host = $('#tagFoot');
+    if(!tagVerified){
+      host.innerHTML = '<div class="ratedmsg" style="color:var(--muted)">👀 Preview — tap our tag in-store to rate</div>';
+      return;
+    }
+    if(S.ratedRecently(r.id)){
+      host.innerHTML = '<div class="ratedmsg">✓ Rated — thanks! Come back in 24h.</div>';
+      return;
+    }
+    host.innerHTML = '<button class="btn accent" id="rateBtn">Rate this visit ★</button>';
+    var rb=$('#rateBtn'); if(rb) rb.onclick = openOverlay;
+  }
+
+  /* ---------- owner ---------- */
+  function showScreen(id){ ['tag','login','dash'].forEach(function(s){ $('#'+s).classList.toggle('show', s===id); }); }
+  function openLogin(){
+    $('#loginPick').innerHTML=restaurants.map(function(r){return '<option value="'+r.id+'">'+esc(r.name)+'</option>';}).join('');
+    $('#loginPw').value=''; $('#loginErr').style.display='none'; showScreen('login');
+  }
+  function doLogin(){
+    var id=parseInt($('#loginPick').value,10), pw=$('#loginPw').value;
+    S.ownerLogin(id,pw).then(function(res){ if(res.ok){ openDash(id); } else { $('#loginErr').style.display='block'; } });
+  }
+  var ownerPw='';
+  function openDash(id){
+    var r=S.get(id); if(!r) return;
+    ownerPw=$('#loginPw').value || ownerPw;
+    $('#dashName').textContent=r.name;
+    $('#dashTier').textContent=(r.paid?'Claimed · Paid · $59/mo':'Claimed (free) — upgrade to unlock photo & billboard');
+    renderDash(r); showScreen('dash');
+  }
+  function renderDash(r){
+    var paid=r.paid, host=$('#dashScroll');
+    var photoInner='<div class="field"><span>Venue photo / logo</span>'+
+      '<div id="ownerPhotoPrev" style="height:120px;border-radius:12px;background:#2A2448 center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:#8A83A6;font-weight:700;font-size:13px">'+(r.hasPhoto?'':'No photo yet')+'</div>'+
+      '<input type="file" accept="image/*" id="ownerPhoto" '+(paid?'':'disabled')+'></div>';
+    var photoBlock = paid ? photoInner :
+      '<div class="lock">'+photoInner+'<div class="veil"><div class="pill">$59/mo</div><div style="font-weight:800;font-size:13px">Upgrade to change your photo</div><div class="lbl" style="text-transform:none">Also unlocks the House Picks billboard</div><button class="btn accent" id="ownerUpgrade" style="padding:10px 16px">Upgrade — $59/mo</button></div></div>';
+
+    host.innerHTML =
+      '<div class="note">'+(S.isServer()
+        ? 'Changes save to the shared database and appear for every customer.'
+        : 'Changes save on <b>this browser only</b> until you attach storage in Vercel (see README) — then it syncs to all devices.')+
+        ' Upgrading opens secure <b>Stripe</b> checkout for the $59/mo tier.</div>'+
+      photoBlock+
+      sec('House Picks billboard'+(paid?'':' (paid)'), (paid?'':'<div class="lbl" style="text-transform:none;margin-bottom:6px">Upgrade to publish these on your card.</div>')+pick(0,r,paid)+pick(1,r,paid)+pick(2,r,paid))+
+      sec('Happy hour', happyBlock(r))+
+      sec('Punch card', fld('Reward (10 punches = reward)','<input type="text" id="fReward" value="'+esc(r.reward||'')+'">')+fld('Coupon valid for (days)','<input type="number" min="1" id="fDays" value="'+(r.couponValidDays||14)+'" style="width:110px">'))+
+      sec('Details', fld('Owner note','<textarea id="fNote" rows="3">'+esc(r.note||'')+'</textarea>')+fld('Website','<input type="text" id="fWebsite" value="'+esc(r.website||'')+'" placeholder="yourplace.com">'))+
+      fld('Change password','<input type="password" id="fPw" placeholder="leave blank to keep current">')+
+      '<button class="btn accent" id="ownerSave">Save changes</button>'+
+      '<button class="btn ghost" id="ownerLogout">Log out</button>';
+
+    if(r.hasPhoto){ S.getPhoto(r.id).then(function(u){ if(u){ var p=$('#ownerPhotoPrev'); if(p){ p.style.backgroundImage='url('+u+')'; p.textContent=''; } } }); }
+    if(paid && $('#ownerPhoto')) $('#ownerPhoto').onchange=function(e){ var f=e.target.files[0]; if(!f) return;
+      S.fileToDataUrl(f).then(function(url){ return S.ownerPhoto(r.id, ownerPw, url); }).then(function(res){ if(res&&res.ok){ toast('Photo updated'); openDash(r.id); } else { toast('Photo failed'); } }).catch(function(){ toast('Could not read image'); }); };
+    if(paid){
+      for(var pi=0; pi<3; pi++){ wirePickPhoto(r, pi); }
+    }
+    if($('#ownerUpgrade')) $('#ownerUpgrade').onclick=function(){
+      toast('Opening secure checkout…');
+      S.checkout(r.id, ownerPw).then(function(res){
+        if(res && res.url){ window.location.href=res.url; }
+        else if(res && res.error==='not_configured'){ toast('Billing not set up yet — add Stripe keys in Vercel'); }
+        else if(res && res.error==='local'){ toast('Attach the database + Stripe to enable live checkout'); }
+        else { toast('Could not start checkout'); }
+      });
+    };
+    bindDays();
+    $('#ownerSave').onclick=function(){ saveOwner(r.id); };
+    $('#ownerLogout').onclick=function(){ ownerPw=''; goHome(); };
+  }
+  function sec(t,inner){ return '<div class="field"><span>'+esc(t)+'</span>'+inner+'</div>'; }
+  function fld(l,inner){ return '<label class="field"><span style="font-weight:700;color:var(--muted)">'+esc(l)+'</span>'+inner+'</label>'; }
+  function pick(i,r,paid){
+    var v=(r.picks&&r.picks[i])||'';
+    var photoBtn = paid ? '<label class="pickPhotoBtn"><div class="pickThumb" id="pickThumb'+i+'">'+(r.hasPickPhoto&&r.hasPickPhoto[i]?'':'Photo')+'</div><input type="file" accept="image/*" data-pickfile="'+i+'" style="display:none"></label>' : '';
+    return '<div class="pickRow">'+photoBtn+'<input type="text" data-pick="'+i+'" placeholder="Top pick #'+(i+1)+'" value="'+esc(v)+'"></div>';
+  }
+  function wirePickPhoto(r,i){
+    if(r.hasPickPhoto && r.hasPickPhoto[i]){
+      S.getPickPhoto(r.id,i).then(function(u){ if(u){ var t=$('#pickThumb'+i); if(t){ t.style.backgroundImage='url('+u+')'; t.textContent=''; } } });
+    }
+    var input=document.querySelector('[data-pickfile="'+i+'"]');
+    if(input) input.onchange=function(e){ var f=e.target.files[0]; if(!f) return;
+      S.fileToDataUrl(f).then(function(url){ return S.ownerPickPhoto(r.id, ownerPw, i, url); }).then(function(res){ if(res&&res.ok){ toast('Photo updated'); openDash(r.id); } else { toast('Photo failed'); } }).catch(function(){ toast('Could not read image'); }); };
+  }
+  function happyBlock(r){
+    var hh=r.happyHour||{}, names=['Su','Mo','Tu','We','Th','Fr','Sa'];
+    var days=names.map(function(n,i){ return '<div class="day'+((hh.days||[]).indexOf(i)>-1?' on':'')+'" data-day="'+i+'">'+n+'</div>'; }).join('');
+    return '<label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;margin-bottom:2px"><input type="checkbox" id="hhOn" '+(hh.enabled?'checked':'')+' style="width:18px;height:18px"> Happy hour enabled</label>'+
+      '<div class="days" id="hhDays">'+days+'</div>'+
+      '<div style="display:flex;gap:10px;margin-top:8px"><label class="field" style="flex:1"><span style="font-weight:700;color:var(--muted)">Start</span><input type="time" id="hhStart" value="'+esc(hh.start||'15:00')+'"></label><label class="field" style="flex:1"><span style="font-weight:700;color:var(--muted)">End</span><input type="time" id="hhEnd" value="'+esc(hh.end||'18:00')+'"></label></div>'+
+      fld('Special (small box)','<input type="text" id="hhSpecial" maxlength="60" value="'+esc(hh.special||'')+'" placeholder="e.g. $2 off drafts">');
+  }
+  function bindDays(){ var w=$('#hhDays'); if(!w) return; w.querySelectorAll('.day').forEach(function(el){ el.onclick=function(){ el.classList.toggle('on'); }; }); }
+  function saveOwner(id){
+    var picks=[]; document.querySelectorAll('[data-pick]').forEach(function(el){ picks[parseInt(el.getAttribute('data-pick'),10)]=el.value; });
+    var days=[]; document.querySelectorAll('#hhDays .day.on').forEach(function(el){ days.push(parseInt(el.getAttribute('data-day'),10)); });
+    var np=$('#fPw')?$('#fPw').value:'';
+    var fields={ picks:picks, reward:$('#fReward').value, couponValidDays:Math.max(1,parseInt($('#fDays').value,10)||1),
+      note:$('#fNote').value, website:$('#fWebsite').value,
+      happyHour:{ enabled:$('#hhOn').checked, days:days, start:$('#hhStart').value||'15:00', end:$('#hhEnd').value||'18:00', special:$('#hhSpecial').value } };
+    if(np && np.trim()) fields.password=np.trim();
+    S.ownerUpdate(id, ownerPw, fields).then(function(res){ if(res.ok){ if(np&&np.trim()) ownerPw=np.trim(); toast('Saved'); openDash(id); } else { toast('Save failed'); } });
+  }
+
+  function goHome(){ tagId=null; tagVerified=false; showScreen(''); S.refresh().then(function(list){ restaurants=list; renderTrack(); }); }
+  function exitTagMode(){
+    tagId=null;
+    try{ history.replaceState({}, '', location.pathname); }catch(e){}
+    goHome();
+  }
+
+  function init(){
+    stage=$('#stage'); track=$('#track');
+    stage.addEventListener('pointerdown',onDown);
+    window.addEventListener('pointermove',onMove,{passive:true});
+    window.addEventListener('pointerup',onUp);
+    window.addEventListener('pointercancel',onUp);
+    $('#prev').onclick=function(){ if(index>0) animateTo(index-1); };
+    $('#next').onclick=function(){ if(index<restaurants.length-1) animateTo(index+1); };
+    document.addEventListener('keydown',function(e){
+      if($('#login').classList.contains('show')||$('#dash').classList.contains('show')||$('#tag').classList.contains('show')||document.querySelector('.ovl')) return;
+      if(e.key==='ArrowLeft'&&index>0) animateTo(index-1);
+      if(e.key==='ArrowRight'&&index<restaurants.length-1) animateTo(index+1);
+    });
+    window.addEventListener('resize',function(){ layout(true); if($('#tag').classList.contains('show')) fitTagCard(); });
+    window.addEventListener('orientationchange',function(){ setTimeout(function(){layout(true); if($('#tag').classList.contains('show')) fitTagCard();},250); });
+    $('#ownerLink').onclick=openLogin;
+    $('#loginBtn').onclick=doLogin;
+    $('#loginPw').addEventListener('keydown',function(e){ if(e.key==='Enter') doLogin(); });
+    document.querySelectorAll('[data-home]').forEach(function(b){ b.onclick=goHome; });
+    $('#tagBrowse').onclick=exitTagMode;
+    window.addEventListener('pointerdown',ovlOnDown);
+    window.addEventListener('pointermove',ovlOnMove,{passive:true});
+    window.addEventListener('pointerup',ovlOnUp);
+    window.addEventListener('pointercancel',ovlOnUp);
+    window.addEventListener('pointermove',pcOnMove,{passive:true});
+    window.addEventListener('pointerup',pcOnUp);
+    window.addEventListener('pointercancel',pcOnUp);
+    setInterval(function(){
+      if($('#login').classList.contains('show')||$('#dash').classList.contains('show')) return;
+      if($('#tag').classList.contains('show')){ renderTagFoot(); return; }
+      renderTrack();
+    }, 60000);
+
+    S.init().then(function(r){
+      restaurants=r.restaurants;
+      var q; try{ q=new URLSearchParams(location.search); }catch(e){ q=null; }
+      var sid=q&&q.get('session_id');
+      if(sid){ renderTrack(); handleReturn(); return; }
+      var rid=q&&q.get('r');
+      if(rid && enterTagMode(parseInt(rid,10))) return;
+      renderTrack();
+    });
+  }
+  // After returning from Stripe Checkout, confirm and flip the listing to Paid.
+  function handleReturn(){
+    var q; try{ q=new URLSearchParams(location.search); }catch(e){ return; }
+    var sid=q.get('session_id');
+    if(sid){
+      S.confirmUpgrade(sid).then(function(res){
+        if(res && res.paid) toast('Upgraded to Paid — photo & billboard unlocked!');
+        history.replaceState({}, '', location.pathname);
+        restaurants=S.list(); renderTrack();
+      });
+    } else if(q.get('upgrade')==='cancelled'){
+      history.replaceState({}, '', location.pathname);
+    }
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+})();
+</script>
+<script defer src="https://cdn.vercel-insights.com/v1/script.js"></script>
+</body>
+</html>
