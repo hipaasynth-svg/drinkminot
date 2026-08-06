@@ -26,6 +26,13 @@
   .brand span{color:var(--accent)}
   .ownerlink{border:none;background:none;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;padding:8px}
   .tagline{padding:0 18px 6px;font-size:10.5px;font-weight:800;letter-spacing:0.04em;color:var(--faint);text-transform:uppercase;flex:none}
+  /* Live section header — shows which category the centred card belongs to and how
+     many venues are in it. The list is already grouped by category (alphabetical)
+     and alphabetized within each group by decorateList(), so this simply labels the
+     section you're currently swiping through. */
+  .section{padding:0 18px 6px;display:flex;align-items:baseline;gap:8px;flex:none;min-height:22px}
+  .section .sname{font-size:15px;font-weight:800;letter-spacing:-.01em;color:var(--accent)}
+  .section .scount{font-size:11px;font-weight:700;color:var(--faint)}
 
   /* Carousel — horizontal Rolodex only, no vertical scroll anywhere */
   .stage{flex:1 1 auto;min-height:0;position:relative;overflow:hidden;padding:2px 4px 4px;touch-action:none;cursor:grab}
@@ -215,6 +222,7 @@
     <button class="ownerlink" id="ownerLink">Owner login</button>
   </div>
   <div class="tagline">Tap · Rate · Earn — Zero tracking. Period.</div>
+  <div class="section" id="sectionHead"></div>
   <div class="stage" id="stage">
     <div class="navbtns l"><button class="arrow" id="prev">‹</button></div>
     <div class="navbtns r"><button class="arrow" id="next">›</button></div>
@@ -375,7 +383,9 @@
   }
   function renderTrack(){
     $('#track').innerHTML = restaurants.map(cardHtml).join('');
+    lastSection=null;   // force the section label to repaint for the new track
     renderDots(); layout(true); loadHeroes(); renderResumeBar();
+    updateSectionHead(index);
   }
   // Resumable "Rate <name> now →" pill: shown on the home screen for up to 2h after
   // a real tag tap (S.recordTap in enterTagMode), so browsing away mid-visit doesn't
@@ -390,6 +400,18 @@
   function renderDots(){
     var d=''; for(var i=0;i<restaurants.length;i++){ d+='<div class="dot'+(i===index?' on':'')+'"></div>'; }
     $('#dots').innerHTML=d;
+  }
+  // Live section label for the currently-centred card. restaurants is already grouped
+  // by category + alphabetized within each group, so the category only changes at a
+  // section boundary — we repaint just then (cheap; called every animation frame).
+  var lastSection=null;
+  function updateSectionHead(i){
+    var host=$('#sectionHead'); if(!host) return;
+    var r=restaurants[i]; if(!r||!r.category){ if(lastSection!==''){ host.innerHTML=''; lastSection=''; } return; }
+    if(r.category===lastSection) return;
+    lastSection=r.category;
+    var n=0; for(var k=0;k<restaurants.length;k++){ if(restaurants[k].category===r.category) n++; }
+    host.innerHTML='<span class="sname">'+esc(r.category)+'</span><span class="scount">'+n+' spot'+(n===1?'':'s')+'</span>';
   }
 
   /* ---------- horizontal Rolodex ---------- */
@@ -414,6 +436,7 @@
       s[i].style.transform='scale('+(1-0.12*k).toFixed(3)+')';
       s[i].style.opacity=(1-0.5*k).toFixed(3);
     }
+    updateSectionHead(Math.max(0,Math.min(restaurants.length-1,Math.round(idxAt(T)))));
   }
   function apply(T){ curX=T; track.style.transform='translate3d('+T+'px,0,0)'; updateVisual(T); }
   function tick(){ vibrate(18); }          // haptic "click" as a card passes centre
