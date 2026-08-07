@@ -137,7 +137,13 @@ function verifyToken(tok) {
   return id;
 }
 
-function seedIds() { return RAW.map(function (_, i) { return i + 1; }); }
+// Venues pulled from the public list because they have no photo. Their ids are the frozen
+// 1-based RAW positions and are NEVER reused or renumbered: every surviving venue keeps its
+// original id, so its Redis-stored photo/votes/profile (all keyed by id) stay correct and the
+// admin tag URLs (/?r=<id>) stay accurate. Gaps in the id sequence here are intentional.
+var REMOVED = { 20: true, 21: true, 22: true, 31: true, 34: true, 35: true, 36: true, 37: true };
+function isRemoved(id) { return !!REMOVED[parseInt(id, 10)]; }
+function seedIds() { return RAW.map(function (_, i) { return i + 1; }).filter(function (id) { return !REMOVED[id]; }); }
 // Profile only — no vote counters here. Votes live in their own hash (see vKey) and are
 // the only thing this file lets move via a real POST /api/rate; nothing seeds fake numbers
 // and there is no admin action that writes to a vote counter directly.
@@ -220,6 +226,7 @@ function normalizeProfile(p) {
 }
 async function getProfile(id) {
   id = parseInt(id, 10);
+  if (isRemoved(id)) return null; // pulled venue: never resurface via ?r=<id>, owner login, or photo fetch
   var raw = await kvGet(rKey(id));
   if (raw) { try { return normalizeProfile(JSON.parse(raw)); } catch (e) { /* fall through to reseed */ } }
   var def = seedProfile(id);
