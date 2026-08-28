@@ -136,6 +136,37 @@ Photos are stored under separate Redis keys and downscaled client-side to keep t
 - `POST /api/owner` `{action:'login'|'update'|'photo', id, password, …}` → owner controls
 - `POST /api/admin` `{password, action, …}` → photos, Claimed/Paid flags, list, reset
 - `GET  /api/photo?id=` → a venue's photo
+- `GET  /api/events` → curated upcoming Minot events (public JSON, upcoming only)
+- `POST /api/events` `{password, action:'add'|'update'|'remove'|'list', event}` → admin-gated event editing
+
+## Minot events feed (`/api/events`)
+
+A curated "what's happening in Minot" feed — the local events endpoint that
+doesn't exist cleanly anywhere else, so DrinkMinot hosts it. It powers the
+Down Under marketing agent (which reads it to plan busy nights) and can later
+back a public "what's on" section on the site.
+
+- **Public read:** `GET /api/events` → `{ ok, events: [...] }`, upcoming only
+  (`date >= today`), soonest first. No auth, no passwords.
+- **Admin editing** (reuses the admin password, exactly like `/api/admin`):
+  `POST /api/events` with `{ password, action, ... }`:
+  - `add` `{ event: { title, date, time?, venue?, category?, url?, note? } }`
+    — `title` and `date` (`YYYY-MM-DD`) are required; `id` is auto-assigned.
+  - `update` `{ event: { id, ...fields } }` — merges into an existing event.
+  - `remove` `{ id }` — deletes by id.
+  - `list` — returns ALL events including past ones (the admin view).
+
+Events are stored under one Redis key (`drinkminot:events`) via the shared
+storage adapter, so they persist in shared mode and fall back to in-memory
+locally. The feed starts empty; add events with the admin `add` action, e.g.:
+
+```bash
+curl -s -X POST https://drinkminot.com/api/events \
+  -H 'Content-Type: application/json' \
+  -d '{"password":"<admin>","action":"add","event":{
+        "title":"NDSU Bison watch party","date":"2026-09-05","time":"18:00",
+        "venue":"Down Under Bar","category":"Sports"}}'
+```
 
 ## Owner auth (server-side)
 
