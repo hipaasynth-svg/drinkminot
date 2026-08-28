@@ -19,7 +19,10 @@ var crypto = require('crypto');
 
 var EVENTS_KEY = 'drinkminot:events';
 
-// Event: { id, title, date:'YYYY-MM-DD', time:'HH:MM', venue, category, url, note }
+// Event: { id, title, date:'YYYY-MM-DD', time:'HH:MM', venue, category, url, note, source }
+// source distinguishes hand-curated events ('manual') from auto-synced feeds
+// (e.g. 'predicthq'); a sync only ever touches its own source (see the 'sync'
+// action), so an auto-feed can never clobber events you added by hand.
 function sanitize(e) {
   e = e || {};
   return {
@@ -30,7 +33,8 @@ function sanitize(e) {
     venue: String(e.venue || '').trim().slice(0, 200),
     category: String(e.category || '').trim().slice(0, 60),
     url: String(e.url || '').trim().slice(0, 500),
-    note: String(e.note || '').trim().slice(0, 500)
+    note: String(e.note || '').trim().slice(0, 500),
+    source: String(e.source || '').trim().slice(0, 40)
   };
 }
 
@@ -69,10 +73,27 @@ module.exports = async function (req, res) {
 
     if (b.action === 'add') {
       var ev = sanitize(b.event || b);
+      if (!ev.source) ev.source = 'manual';
       if (!ev.title || !ev.date) { L.json(res, 400, { error: 'title_and_date_required' }); return; }
       list.push(ev);
       await saveEvents(list);
       L.json(res, 200, { ok: true, event: ev });
+      return;
+    }
+    // Idempotent, source-scoped auto-sync: replace ALL events of one source
+    // with the provided set, leaving every other source (manual, etc.) intact.
+    // { password, action:'sync', source:'predicthq', events:[...] }
+    if (b.action === 'sync') {
+      var src = String(b.source || '').trim().slice(0, 40);
+      if (!src) { L.json(res, 400, { error: 'source_required' }); return; }
+      var incoming = (Array.isArray(b.events) ? b.events : [])
+        .map(sanitize)
+        .filter(function (e) { return e.title && e.date; });
+      incoming.forEach(function (e) { e.source = src; });
+      var others = list.filter(function (e) { return (e.source || 'manual') !== src; });
+      var next = others.concat(incoming);
+      await saveEvents(next);
+      L.json(res, 200, { ok: true, source: src, synced: incoming.length, total: next.length });
       return;
     }
     if (b.action === 'update') {
