@@ -151,10 +151,20 @@ back a public "what's on" section on the site.
 - **Admin editing** (reuses the admin password, exactly like `/api/admin`):
   `POST /api/events` with `{ password, action, ... }`:
   - `add` `{ event: { title, date, time?, venue?, category?, url?, note? } }`
-    — `title` and `date` (`YYYY-MM-DD`) are required; `id` is auto-assigned.
+    — `title` and `date` (`YYYY-MM-DD`) are required; `id` is auto-assigned;
+    `source` defaults to `manual`.
   - `update` `{ event: { id, ...fields } }` — merges into an existing event.
   - `remove` `{ id }` — deletes by id.
   - `list` — returns ALL events including past ones (the admin view).
+  - `sync` `{ source, events: [...] }` — idempotent auto-feed: **replaces all
+    events of that `source`** (e.g. `predicthq`) with the provided set, leaving
+    every other source untouched. This is how an automated pull (PredictHQ,
+    Ticketmaster, …) keeps the feed current without ever clobbering the events
+    you added by hand (`source: manual`).
+
+Each event carries a `source` so hand-curated and auto-synced events coexist
+safely. Point an automated sync at the `sync` action and curate the local
+one-offs by hand with `add`.
 
 Events are stored under one Redis key (`drinkminot:events`) via the shared
 storage adapter, so they persist in shared mode and fall back to in-memory
