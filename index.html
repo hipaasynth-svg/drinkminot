@@ -363,7 +363,7 @@
       '</div></div><div class="pcDots" id="pcDots"></div></div>' : '';
     var hhbar = (r.paid && happy) ? '<div class="hhbar"><div class="t">⚡ Happy hour now</div><div class="s">'+esc(r.happyHour.special||'')+' · til '+S.to12h(r.happyHour.end)+'</div></div>' : '';
     var ticks='';
-    for(var i=0;i<(rec.total||10);i++){ ticks+='<div class="tick'+(i<rec.done?' on':'')+'"></div>'; }
+    for(var i=0;i<(rec.total||3);i++){ ticks+='<div class="tick'+(i<rec.done?' on':'')+'"></div>'; }
     var couponActive = rec.coupon && rec.coupon.expiresAt>Date.now();
     var coupon = couponActive ? '<div class="coupon"><div><div style="font-size:12px;font-weight:800;color:#7CE05C">'+esc(rec.coupon.reward||'Reward earned!')+'</div><div style="font-size:11px;color:#9FE88C;font-weight:700;margin-top:2px">Code '+esc(rec.coupon.code)+' · exp '+new Date(rec.coupon.expiresAt).toLocaleDateString(undefined,{month:'short',day:'numeric'})+'</div></div><div style="font-size:10px;font-weight:800;color:#1a1430;background:#7CE05C;padding:5px 9px;border-radius:20px">EARNED</div></div>' : '';
 
@@ -376,7 +376,7 @@
         hhbar+
         '<div class="row"><div><div class="lbl">Verified ratings</div><div class="num">'+r.totalRatings+'</div></div>'+
           '<div style="text-align:right"><div class="lbl">Your punches</div><div class="ticks">'+ticks+'</div>'+
-          '<div class="lbl" style="text-transform:none;margin-top:4px">'+rec.done+'/'+(rec.total||10)+'</div></div></div>'+
+          '<div class="lbl" style="text-transform:none;margin-top:4px">'+rec.done+'/'+(rec.total||3)+'</div></div></div>'+
         billboard+coupon+
       '</div>';
   }
@@ -783,7 +783,7 @@
       photoBlock+
       sec('House Picks billboard'+(paid?'':' (paid)'), (paid?'':'<div class="lbl" style="text-transform:none;margin-bottom:6px">Upgrade to publish these on your card.</div>')+pick(0,r,paid)+pick(1,r,paid)+pick(2,r,paid))+
       sec('Happy hour', happyBlock(r))+
-      sec('Punch card', fld('Reward (10 punches = reward)','<input type="text" id="fReward" value="'+esc(r.reward||'')+'">')+fld('Coupon valid for (days)','<input type="number" min="1" id="fDays" value="'+(r.couponValidDays||14)+'" style="width:110px">'))+
+      sec('Punch card', fld('Reward (3 punches = reward)','<input type="text" id="fReward" value="'+esc(r.reward||'')+'">')+fld('Coupon valid for (days)','<input type="number" min="1" id="fDays" value="'+(r.couponValidDays||14)+'" style="width:110px">'))+
       sec('Details', fld('Owner note','<textarea id="fNote" rows="3">'+esc(r.note||'')+'</textarea>')+fld('Website','<input type="text" id="fWebsite" value="'+esc(r.website||'')+'" placeholder="yourplace.com">'))+
       fld('Change password','<input type="password" id="fPw" placeholder="leave blank to keep current">')+
       '<button class="btn accent" id="ownerSave">Save changes</button>'+
@@ -890,11 +890,18 @@
     S.init().then(function(r){
       restaurants=r.restaurants;
       var q; try{ q=new URLSearchParams(location.search); }catch(e){ q=null; }
+      // A durable, wipe-proof card (Wallet pass / saved QR) links back with ?dev=<token>
+      // so this phone re-adopts its anonymous card and pulls the backup — even after a wipe.
+      var dev=q&&q.get('dev');
+      if(dev){ S.adoptDevice(dev).then(function(ok){ if(ok){ if($('#tag').classList.contains('show')) renderTagScreen(); else renderTrack(); } }); }
       var sid=q&&q.get('session_id');
       if(sid){ renderTrack(); handleReturn(); return; }
       var oid=q&&q.get('owner');
       if(oid){ var on=parseInt(oid,10), or=S.get(on);
         if(or){ renderTrack(); if(or.claimed){ openLogin(); var s=$('#loginPick'); if(s) s.value=String(on); } else { openClaim(on); } return; } }
+      // Straight-to-admin: password login prefilled to this venue, no first-run claim.
+      var lid=q&&q.get('login');
+      if(lid){ var ln=parseInt(lid,10); if(S.get(ln)){ renderTrack(); openLogin(); var ls=$('#loginPick'); if(ls) ls.value=String(ln); return; } }
       var rid=q&&q.get('r');
       if(rid && enterTagMode(parseInt(rid,10))) return;
       renderTrack();

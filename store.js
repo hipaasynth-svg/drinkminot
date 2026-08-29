@@ -142,7 +142,7 @@
         picks: claimed ? ['Cold beer cave', 'ND craft & local cans', 'Weekend wine tasting'] : ['', '', ''],
         note: claimed ? 'Locally owned — thanks for drinking local, Minot!' : '',
         website: claimed ? 'broadwayliquor.com' : '',
-        reward: 'Free item on your 10th punch', couponValidDays: 14,
+        reward: 'Free item on your 3rd punch', couponValidDays: 14,
         happyHour: claimed
           ? { enabled: true, days: [0, 1, 2, 3, 4, 5, 6], start: '15:00', end: '18:00', special: '$1 off six-packs' }
           : { enabled: false, days: [1, 2, 3, 4, 5], start: '15:00', end: '18:00', special: '' }
@@ -172,13 +172,13 @@
     return d;
   }
   function saveDevice(d) { try { global.localStorage.setItem(DKEY, JSON.stringify(d)); } catch (e) {} }
-  function deviceRec(id) { var d = loadDevice(); return d.perRest[id] || { done: 0, total: 10, coupon: null, ratedAt: 0 }; }
+  function deviceRec(id) { var d = loadDevice(); return d.perRest[id] || { done: 0, total: 3, coupon: null, ratedAt: 0 }; }
   function ratedRecently(id) { var rec = deviceRec(id); return !!(rec.ratedAt && Date.now() - rec.ratedAt < RATE_WINDOW_MS); }
   // Called only when a real tag tap lands (enterTagMode) — never from the Paid preview
   // path — so the resumable "Rate now" pill stays gated on an actual physical visit.
   function recordTap(id) {
-    var d = loadDevice(); var rec = d.perRest[id] || { done: 0, total: 10, coupon: null, ratedAt: 0 };
-    rec.tapAt = Date.now(); d.perRest[id] = rec; saveDevice(d);
+    var d = loadDevice(); var rec = d.perRest[id] || { done: 0, total: 3, coupon: null, ratedAt: 0 };
+    rec.tapAt = Date.now(); d.perRest[id] = rec; saveDevice(d); deviceBackup();
   }
   // Most recent still-live tap (within TAP_WINDOW_MS) that hasn't already been rated.
   function pendingTap() {
@@ -193,15 +193,55 @@
   }
   // Apply a completed rating to this device's punch card; returns the record.
   function punch(id, couponValidDays, reward) {
-    var d = loadDevice(); var rec = d.perRest[id] || { done: 0, total: 10, coupon: null, ratedAt: 0 };
+    var d = loadDevice(); var rec = d.perRest[id] || { done: 0, total: 3, coupon: null, ratedAt: 0 };
     rec.ratedAt = Date.now();
     var nd = rec.done + 1;
-    if (nd >= (rec.total || 10)) {
+    if (nd >= (rec.total || 3)) {
       rec.done = 0;
       var days = couponValidDays || 14;
       rec.coupon = { code: 'DRK-' + Math.random().toString(36).slice(2, 7).toUpperCase(), issuedAt: Date.now(), expiresAt: Date.now() + days * 86400000, reward: reward || 'Reward earned!' };
     } else { rec.done = nd; }
-    d.perRest[id] = rec; saveDevice(d); return rec;
+    d.perRest[id] = rec; saveDevice(d); deviceBackup(); return rec;
+  }
+
+  /* ---------- anonymous server backup of punches (keyed by the random deviceId) ----------
+     The card lives in localStorage as before; in server mode we also mirror it to the
+     backend under the device's random token, so a reload or a wiped localStorage can
+     restore it. No identity is ever attached — the token is the only key. */
+  function deviceBackup() {
+    if (mode !== 'server') return;
+    var d = loadDevice();
+    api('device', 'POST', { action: 'put', deviceId: d.deviceId, perRest: d.perRest }).catch(function () {});
+  }
+  // Merge one venue's local + backup record without losing progress or a live coupon.
+  function mergeRec(a, b) {
+    if (!a) return b; if (!b) return a;
+    var newer = (b.ratedAt || 0) >= (a.ratedAt || 0) ? b : a, older = newer === b ? a : b;
+    var m = { done: newer.done || 0, total: newer.total || older.total || 3, ratedAt: newer.ratedAt || 0, tapAt: Math.max(a.tapAt || 0, b.tapAt || 0) };
+    var coup = newer.coupon || null;
+    if ((!coup || (coup.expiresAt || 0) < Date.now()) && older.coupon && (older.coupon.expiresAt || 0) > Date.now()) coup = older.coupon;
+    m.coupon = coup;
+    return m;
+  }
+  // On load (server mode): pull the backup, merge it into this device's local state,
+  // then push the union back so the server always holds the latest.
+  function deviceRestore() {
+    if (mode !== 'server') return Promise.resolve();
+    var d = loadDevice();
+    return api('device', 'POST', { action: 'get', deviceId: d.deviceId }).then(function (res) {
+      var serverPer = (res.ok && res.data && res.data.perRest) || null;
+      if (!serverPer) return;
+      var cur = loadDevice(), changed = false, ids = {};
+      Object.keys(cur.perRest || {}).forEach(function (k) { ids[k] = 1; });
+      Object.keys(serverPer).forEach(function (k) { ids[k] = 1; });
+      Object.keys(ids).forEach(function (id) {
+        var merged = mergeRec(cur.perRest[id], serverPer[id]);
+        if (JSON.stringify(merged) !== JSON.stringify(cur.perRest[id])) changed = true;
+        cur.perRest[id] = merged;
+      });
+      if (changed) saveDevice(cur);
+      deviceBackup();
+    }).catch(function () {});
   }
 
   /* ---------- local-mode persistence ---------- */
@@ -259,7 +299,19 @@
     }).catch(function () {
       mode = 'local';
       cache = decorateList(loadLocal().restaurants);
-    }).then(function () { return { mode: mode, restaurants: cache }; });
+    }).then(function () { return deviceRestore().catch(function () {}); })
+      .then(function () { return { mode: mode, restaurants: cache }; });
+  }
+
+  // Adopt a device token handed back by a durable, wipe-proof store (a Wallet pass,
+  // a saved QR, a passkey). Any punches already on this browser are kept and merged
+  // into the adopted token's backup, so nothing is lost when the two meet.
+  function adoptDevice(token) {
+    if (!/^dev_[a-z0-9]{6,80}$/i.test(String(token || ''))) return Promise.resolve(false);
+    var d = loadDevice();
+    if (d.deviceId === token) return deviceRestore().then(function () { return true; });
+    d.deviceId = token; saveDevice(d);           // keep existing perRest, switch the key
+    return deviceRestore().then(function () { return true; });
   }
 
   function refresh() {
@@ -451,6 +503,7 @@
     list: list, get: get, getPhoto: getPhoto, clearPhoto: clearPhoto,
     getPickPhoto: getPickPhoto, clearPickPhoto: clearPickPhoto,
     rate: rate, ratedRecently: ratedRecently, deviceRec: deviceRec, recordTap: recordTap, pendingTap: pendingTap,
+    deviceId: function () { return loadDevice().deviceId; }, deviceBackup: deviceBackup, deviceRestore: deviceRestore, adoptDevice: adoptDevice,
     ownerLogin: ownerLogin, ownerClaim: ownerClaim, ownerUpdate: ownerUpdate, ownerPhoto: ownerPhoto, ownerPickPhoto: ownerPickPhoto,
     checkout: checkout, confirmUpgrade: confirmUpgrade,
     adminList: adminList, adminPhoto: adminPhoto, adminRemovePhoto: adminRemovePhoto,

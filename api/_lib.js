@@ -161,7 +161,7 @@ function seedProfile(id) {
     picks: claimed ? ['Cold beer cave', 'ND craft & local cans', 'Weekend wine tasting'] : ['', '', ''],
     note: claimed ? 'Locally owned — thanks for drinking local, Minot!' : '',
     website: claimed ? 'broadwayliquor.com' : '',
-    reward: 'Free item on your 10th punch', couponValidDays: 14,
+    reward: 'Free item on your 3rd punch', couponValidDays: 14,
     happyHour: claimed
       ? { enabled: true, days: [0, 1, 2, 3, 4, 5, 6], start: '15:00', end: '18:00', special: '$1 off six-packs' }
       : { enabled: false, days: [1, 2, 3, 4, 5], start: '15:00', end: '18:00', special: '' }
