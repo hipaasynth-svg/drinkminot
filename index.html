@@ -261,6 +261,20 @@
     </div>
   </div>
 
+  <!-- OWNER FIRST-RUN CLAIM (opened once via ?owner=<id>, no password) -->
+  <div class="screen" id="claim">
+    <div class="shead"><button class="back" data-home>←</button><b>Set up your page</b></div>
+    <div class="scroll">
+      <div class="note">Welcome! This opened your dashboard <b>once</b> with no password. Set your password now to lock it to you — you'll use it every time after this.</div>
+      <div class="field"><span>Your venue</span><div id="claimName" style="font-weight:800;font-size:16px"></div></div>
+      <label class="field"><span>New password</span><input type="password" id="claimPw" placeholder="at least 4 characters" autocomplete="new-password"></label>
+      <label class="field"><span>Confirm password</span><input type="password" id="claimPw2" placeholder="re-enter it" autocomplete="new-password"></label>
+      <button class="btn accent" id="claimBtn">Set password &amp; open dashboard</button>
+      <div id="claimErr" style="color:#F0866B;font-size:13px;font-weight:700;display:none"></div>
+      <div class="note">Your public page: <a id="claimUrl" href="#" target="_blank" rel="noopener"></a></div>
+    </div>
+  </div>
+
   <!-- OWNER DASHBOARD -->
   <div class="screen" id="dash">
     <div class="shead"><button class="back" data-home>←</button><div><b id="dashName">Owner</b><div class="lbl" id="dashTier" style="text-transform:none"></div></div></div>
@@ -715,7 +729,27 @@
   }
 
   /* ---------- owner ---------- */
-  function showScreen(id){ ['tag','login','dash'].forEach(function(s){ $('#'+s).classList.toggle('show', s===id); }); }
+  function showScreen(id){ ['tag','login','claim','dash'].forEach(function(s){ $('#'+s).classList.toggle('show', s===id); }); }
+  function publicUrl(id){ try{ return location.origin + '/?r=' + id; }catch(e){ return '/?r=' + id; } }
+  var claimId=null;
+  function openClaim(id){
+    var r=S.get(id); if(!r) return;
+    claimId=id;
+    $('#claimName').textContent=r.name;
+    $('#claimPw').value=''; $('#claimPw2').value=''; $('#claimErr').style.display='none';
+    var u=publicUrl(id), a=$('#claimUrl'); if(a){ a.textContent=u; a.href=u; }
+    showScreen('claim');
+  }
+  function doClaim(){
+    var pw=$('#claimPw').value||'', pw2=$('#claimPw2').value||'', err=$('#claimErr');
+    if(pw.length<4){ err.textContent='Password must be at least 4 characters.'; err.style.display='block'; return; }
+    if(pw!==pw2){ err.textContent='Passwords do not match.'; err.style.display='block'; return; }
+    S.ownerClaim(claimId, pw).then(function(res){
+      if(res && res.ok){ ownerPw=pw; toast('Password set — welcome!'); openDash(claimId); }
+      else if(res && res.reason==='already_claimed'){ err.textContent='This page is already claimed — please log in.'; err.style.display='block'; setTimeout(function(){ openLogin(); var s=$('#loginPick'); if(s) s.value=String(claimId); }, 1200); }
+      else { err.textContent='Could not set password. Please try again.'; err.style.display='block'; }
+    });
+  }
   function openLogin(){
     $('#loginPick').innerHTML=restaurants.map(function(r){return '<option value="'+r.id+'">'+esc(r.name)+'</option>';}).join('');
     $('#loginPw').value=''; $('#loginErr').style.display='none'; showScreen('login');
@@ -741,6 +775,7 @@
       '<div class="lock">'+photoInner+'<div class="veil"><div class="pill">$59/mo</div><div style="font-weight:800;font-size:13px">Upgrade to change your photo</div><div class="lbl" style="text-transform:none">Also unlocks the House Picks billboard</div><button class="btn accent" id="ownerUpgrade" style="padding:10px 16px">Upgrade — $59/mo</button></div></div>';
 
     host.innerHTML =
+      '<div class="field"><span>Your public page</span><div style="display:flex;gap:8px;align-items:center"><input type="text" id="ownerUrl" readonly value="'+esc(publicUrl(r.id))+'" style="flex:1"><button class="btn ghost" id="ownerCopy" style="padding:8px 12px;white-space:nowrap">Copy</button></div><a class="ownerlink" style="padding-left:0" href="'+esc(publicUrl(r.id))+'" target="_blank" rel="noopener">Open my page →</a></div>'+
       '<div class="note">'+(S.isServer()
         ? 'Changes save to the shared database and appear for every customer.'
         : 'Changes save on <b>this browser only</b> until you attach storage in Vercel (see README) — then it syncs to all devices.')+
@@ -753,6 +788,8 @@
       fld('Change password','<input type="password" id="fPw" placeholder="leave blank to keep current">')+
       '<button class="btn accent" id="ownerSave">Save changes</button>'+
       '<button class="btn ghost" id="ownerLogout">Log out</button>';
+
+    var oc=$('#ownerCopy'); if(oc) oc.onclick=function(){ var i=$('#ownerUrl'); if(!i) return; try{ i.select(); }catch(e){} try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(i.value); } else { document.execCommand('copy'); } toast('Link copied'); }catch(e){ toast('Long-press the link to copy'); } };
 
     if(r.hasPhoto){ S.getPhoto(r.id).then(function(u){ if(u){ var p=$('#ownerPhotoPrev'); if(p){ p.style.backgroundImage='url('+u+')'; p.textContent=''; } } }); }
     if(paid && $('#ownerPhoto')) $('#ownerPhoto').onchange=function(e){ var f=e.target.files[0]; if(!f) return;
@@ -833,6 +870,8 @@
     $('#ownerLink').onclick=openLogin;
     $('#loginBtn').onclick=doLogin;
     $('#loginPw').addEventListener('keydown',function(e){ if(e.key==='Enter') doLogin(); });
+    $('#claimBtn').onclick=doClaim;
+    $('#claimPw2').addEventListener('keydown',function(e){ if(e.key==='Enter') doClaim(); });
     document.querySelectorAll('[data-home]').forEach(function(b){ b.onclick=goHome; });
     $('#tagBrowse').onclick=exitTagMode;
     window.addEventListener('pointerdown',ovlOnDown);
@@ -853,6 +892,9 @@
       var q; try{ q=new URLSearchParams(location.search); }catch(e){ q=null; }
       var sid=q&&q.get('session_id');
       if(sid){ renderTrack(); handleReturn(); return; }
+      var oid=q&&q.get('owner');
+      if(oid){ var on=parseInt(oid,10), or=S.get(on);
+        if(or){ renderTrack(); if(or.claimed){ openLogin(); var s=$('#loginPick'); if(s) s.value=String(on); } else { openClaim(on); } return; } }
       var rid=q&&q.get('r');
       if(rid && enterTagMode(parseInt(rid,10))) return;
       renderTrack();

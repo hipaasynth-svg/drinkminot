@@ -17,6 +17,18 @@ module.exports = async function (req, res) {
       return;
     }
 
+    // First-run claim: an unclaimed venue can be opened once with no password (the
+    // owner's ?owner=<id> QR). Setting a password claims it; after that this path is
+    // closed and the owner must log in. One-time by construction — the claimed flag.
+    if (b.action === 'claim') {
+      if (profile.claimed) { L.json(res, 409, { error: 'already_claimed' }); return; }
+      var np = String(b.password || '').trim();
+      if (np.length < 4) { L.json(res, 400, { error: 'weak_password' }); return; }
+      await L.updateProfile(profile.id, function (p) { p.password = L.hashPw(np); p.claimed = true; });
+      L.json(res, 200, { ok: true, id: profile.id, name: profile.name, paid: false, token: L.signToken(profile.id) });
+      return;
+    }
+
     var authed = (b.token && L.verifyToken(b.token) === profile.id) || L.verifyPw(b.password, profile.password);
     if (!authed) { L.json(res, 401, { error: 'unauthorized' }); return; }
 
