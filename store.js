@@ -88,7 +88,8 @@
     ["Blissful Bee Juicery", "North & South locations, Minot, ND", "Verify hours", "Juice & Nutrition", false, false],
     ["Superior Nutrition Minot", "Minot, ND", "Verify hours", "Juice & Nutrition", false, false],
     ["Minot Nutrition Addiction", "Minot, ND", "Verify hours", "Juice & Nutrition", false, false],
-    ["Down Under Bar", "Minot, ND", "Mon-Thu 10am-10pm, Fri 10am-12am, Sat verify, Sun 11am-10pm", "Bars & Lounges", true, false]
+    ["Down Under Bar", "Minot, ND", "Mon-Thu 10am-10pm, Fri 10am-12am, Sat verify, Sun 11am-10pm", "Bars & Lounges", true, false],
+    ["Grainhopper", "Minot, ND", "Verify hours", "Breweries & Taprooms", true, false]
   ];
   var DEFAULT_CATEGORY = 'Other';
   // Static attributes for a given venue id, read straight from the frozen RAW table so
@@ -322,6 +323,18 @@
     if (mode === 'server') return api('owner', 'POST', { action: 'login', id: id, password: pw }).then(function (res) { if (res.ok && res.data.token) ownerTok[id] = res.data.token; return res.ok ? { ok: true, data: res.data } : { ok: false }; });
     var lr = localFind(loadLocal(), id); return Promise.resolve(lr && pw === lr.password ? { ok: true, data: { id: lr.id, name: lr.name, paid: lr.paid } } : { ok: false });
   }
+  // First-run claim: open an unclaimed venue once with no password, then set one.
+  // Server enforces one-time via the claimed flag; local mirrors it.
+  function ownerClaim(id, newPw) {
+    id = parseInt(id, 10);
+    if (mode === 'server') return api('owner', 'POST', { action: 'claim', id: id, password: newPw }).then(function (res) { if (res.ok && res.data && res.data.token) ownerTok[id] = res.data.token; return { ok: !!res.ok, reason: res.data && res.data.error, data: res.data }; });
+    var d = loadLocal(), lr = localFind(d, id);
+    if (!lr) return Promise.resolve({ ok: false, reason: 'not_found' });
+    if (lr.claimed) return Promise.resolve({ ok: false, reason: 'already_claimed' });
+    lr.password = newPw; lr.claimed = true;
+    saveLocal(d); cache = decorateList(d.restaurants);
+    return Promise.resolve({ ok: true });
+  }
   function ownerUpdate(id, pw, fields) {
     if (mode === 'server') return api('owner', 'POST', { action: 'update', id: id, token: ownerTok[id], password: pw, fields: fields }).then(function (res) { return { ok: res.ok }; }).then(function (r) { return refresh().then(function () { return r; }); });
     var d = loadLocal(), lr = localFind(d, id);
@@ -438,7 +451,7 @@
     list: list, get: get, getPhoto: getPhoto, clearPhoto: clearPhoto,
     getPickPhoto: getPickPhoto, clearPickPhoto: clearPickPhoto,
     rate: rate, ratedRecently: ratedRecently, deviceRec: deviceRec, recordTap: recordTap, pendingTap: pendingTap,
-    ownerLogin: ownerLogin, ownerUpdate: ownerUpdate, ownerPhoto: ownerPhoto, ownerPickPhoto: ownerPickPhoto,
+    ownerLogin: ownerLogin, ownerClaim: ownerClaim, ownerUpdate: ownerUpdate, ownerPhoto: ownerPhoto, ownerPickPhoto: ownerPickPhoto,
     checkout: checkout, confirmUpgrade: confirmUpgrade,
     adminList: adminList, adminPhoto: adminPhoto, adminRemovePhoto: adminRemovePhoto,
     adminPickPhoto: adminPickPhoto, adminRemovePickPhoto: adminRemovePickPhoto,
