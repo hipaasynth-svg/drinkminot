@@ -142,7 +142,7 @@
         picks: claimed ? ['Cold beer cave', 'ND craft & local cans', 'Weekend wine tasting'] : ['', '', ''],
         note: claimed ? 'Locally owned — thanks for drinking local, Minot!' : '',
         website: claimed ? 'broadwayliquor.com' : '',
-        reward: 'Free item on your 10th punch', couponValidDays: 14,
+        reward: 'Free item on your 3rd punch', couponValidDays: 14,
         happyHour: claimed
           ? { enabled: true, days: [0, 1, 2, 3, 4, 5, 6], start: '15:00', end: '18:00', special: '$1 off six-packs' }
           : { enabled: false, days: [1, 2, 3, 4, 5], start: '15:00', end: '18:00', special: '' }
@@ -172,12 +172,12 @@
     return d;
   }
   function saveDevice(d) { try { global.localStorage.setItem(DKEY, JSON.stringify(d)); } catch (e) {} }
-  function deviceRec(id) { var d = loadDevice(); return d.perRest[id] || { done: 0, total: 10, coupon: null, ratedAt: 0 }; }
+  function deviceRec(id) { var d = loadDevice(); return d.perRest[id] || { done: 0, total: 3, coupon: null, ratedAt: 0 }; }
   function ratedRecently(id) { var rec = deviceRec(id); return !!(rec.ratedAt && Date.now() - rec.ratedAt < RATE_WINDOW_MS); }
   // Called only when a real tag tap lands (enterTagMode) — never from the Paid preview
   // path — so the resumable "Rate now" pill stays gated on an actual physical visit.
   function recordTap(id) {
-    var d = loadDevice(); var rec = d.perRest[id] || { done: 0, total: 10, coupon: null, ratedAt: 0 };
+    var d = loadDevice(); var rec = d.perRest[id] || { done: 0, total: 3, coupon: null, ratedAt: 0 };
     rec.tapAt = Date.now(); d.perRest[id] = rec; saveDevice(d);
   }
   // Most recent still-live tap (within TAP_WINDOW_MS) that hasn't already been rated.
@@ -193,10 +193,10 @@
   }
   // Apply a completed rating to this device's punch card; returns the record.
   function punch(id, couponValidDays, reward) {
-    var d = loadDevice(); var rec = d.perRest[id] || { done: 0, total: 10, coupon: null, ratedAt: 0 };
+    var d = loadDevice(); var rec = d.perRest[id] || { done: 0, total: 3, coupon: null, ratedAt: 0 };
     rec.ratedAt = Date.now();
     var nd = rec.done + 1;
-    if (nd >= (rec.total || 10)) {
+    if (nd >= (rec.total || 3)) {
       rec.done = 0;
       var days = couponValidDays || 14;
       rec.coupon = { code: 'DRK-' + Math.random().toString(36).slice(2, 7).toUpperCase(), issuedAt: Date.now(), expiresAt: Date.now() + days * 86400000, reward: reward || 'Reward earned!' };
