@@ -1,0 +1,102 @@
+<meta charset="utf-8">
+<title>DrinkMinot Best Practices</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --paper: #FBF9F4; --card: #EFE6D5; --card-edge: #DFD0B4;
+    --espresso: #15313A; --ink: #33474E; --caramel: #B27A21; --caramel-deep: #8A5A12;
+    --stone: #7B776C; --sage: #9A3B4C; --sage-soft: #F6E9E7; --sage-edge: #E7CBC9;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --paper: #101F24; --card: #182A2F; --card-edge: #2A4149;
+    --espresso: #EAF1EC; --ink: #D3DEDC; --caramel: #D69B3A; --caramel-deep: #E7B25A;
+    --stone: #93A09B; --sage: #D98192; --sage-soft: #2A1D20; --sage-edge: #47313A;
+  }}
+  :root[data-theme="dark"] {
+    --paper: #101F24; --card: #182A2F; --card-edge: #2A4149;
+    --espresso: #EAF1EC; --ink: #D3DEDC; --caramel: #D69B3A; --caramel-deep: #E7B25A;
+    --stone: #93A09B; --sage: #D98192; --sage-soft: #2A1D20; --sage-edge: #47313A;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif; line-height: 1.32; -webkit-font-smoothing: antialiased; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .rounded { font-family: ui-rounded,"SF Pro Rounded","Nunito","Segoe UI",system-ui,sans-serif; }
+  .sheet { width: 8.5in; min-height: 11in; margin: 0 auto; padding: 0.5in 0.65in; }
+
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 2px solid var(--caramel); padding-bottom: 10px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand .mark { height: 52px; width: auto; flex: none; }
+  .wordmark { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; font-weight: 800; font-size: 27px; letter-spacing: -0.02em; line-height: 1; }
+  .wordmark .eat { color: var(--espresso); } .wordmark .minot { color: var(--caramel); } .wordmark .com { color: var(--stone); }
+  .wordmark .tag { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.07em; color: var(--stone); margin-top: 5px; }
+  .forwho { background: var(--caramel); color: var(--paper); font-weight: 800; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; padding: 7px 14px; border-radius: 999px; text-align: center; }
+  .forwho span { display: block; font-weight: 700; font-size: 8.5px; letter-spacing: 0.08em; opacity: .92; }
+
+  .hook { margin: 16px 0 4px; }
+  .hook h1 { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; color: var(--espresso); font-weight: 800; font-size: 27px; line-height: 1.08; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+  .hook p { font-size: 13px; margin: 8px 0 0; max-width: 78ch; color: var(--ink); }
+
+  .group { margin-top: 18px; }
+  h2.section { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; color: var(--espresso); font-size: 12px; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; margin: 0 0 11px; display: flex; align-items: center; gap: 10px; }
+  h2.section .n { color: var(--paper); background: var(--caramel); width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 900; }
+  h2.section::after { content: ""; flex: 1; height: 2px; background: var(--card-edge); border-radius: 2px; }
+
+  .tip { display: grid; grid-template-columns: 20px 1fr; gap: 11px; align-items: start; margin-bottom: 9px; }
+  .tip .tick { color: var(--caramel); font-weight: 900; font-size: 15px; line-height: 1.1; }
+  .tip h3 { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; color: var(--espresso); font-size: 13.5px; font-weight: 800; margin: 0 0 1px; letter-spacing: -0.01em; }
+  .tip p { margin: 0; font-size: 12px; }
+
+  .kicker { margin-top: 20px; background: var(--sage-soft); border: 2px solid var(--sage-edge); border-radius: 14px; padding: 13px 18px; display: flex; align-items: center; gap: 14px; }
+  .kicker .big { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; color: var(--sage); font-weight: 800; font-size: 26px; line-height: 1; flex: none; }
+  .kicker p { margin: 0; font-size: 12.5px; } .kicker b { color: var(--espresso); }
+
+  .footnote { margin-top: 18px; color: var(--stone); font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; font-weight: 700; text-align: center; }
+
+  @media (max-width: 560px) { .sheet { width: 100%; padding: 24px 20px; } }
+  @media print { @page { size: letter; margin: 0.4in; } html, body { background: #fff; } .sheet { width: auto; min-height: 0; margin: 0; padding: 0; } }
+</style>
+
+<div class="sheet">
+  <header class="head">
+    <div class="brand">
+      <img class="mark" alt="DrinkMinot raccoon" src="MASCOT_DATA_URI">
+      <div class="wordmark rounded"><span class="eat">Drink</span><span class="minot">Minot</span><span class="com">.com</span>
+        <span class="tag">tap · rate · earn</span>
+      </div>
+    </div>
+    <div class="forwho"><span>Playbook for</span>{{BARNAME}}</div>
+  </header>
+
+  <section class="hook">
+    <h1>Get the most out of DrinkMinot</h1>
+    <p>The system works when the tags are easy to reach, the ask is natural, and you keep an eye on what's landing. Nine habits that turn taps into repeat visits.</p>
+  </section>
+
+  <div class="group">
+    <h2 class="section"><span class="n rounded">1</span> Set it up right</h2>
+    <div class="tip"><span class="tick">✓</span><div><h3>Sticker every table</h3><p>We provide table stickers <b>at cost</b> — it's the single biggest driver of taps. Add the bar top, coasters, and the check presenter so a tap is never more than an arm's reach away.</p></div></div>
+    <div class="tip"><span class="tick">✓</span><div><h3>Give staff one line</h3><p>"Tap the tag, rate us, earn a punch." That's the whole training — no logins, no register steps.</p></div></div>
+    <div class="tip"><span class="tick">✓</span><div><h3>Make the reward worth chasing</h3><p>Three taps to a deal your regulars actually want — a free well drink or a real discount, not a token.</p></div></div>
+  </div>
+
+  <div class="group">
+    <h2 class="section"><span class="n rounded">2</span> Drive the first wave</h2>
+    <div class="tip"><span class="tick">✓</span><div><h3>Launch loud</h3><p>Post your opening offer on socials and put a sign by the door for the first two weeks.</p></div></div>
+    <div class="tip"><span class="tick">✓</span><div><h3>Invite your regulars first</h3><p>Ask your favorites to tap on the way out — they seed your verified ratings and start their own punch cards.</p></div></div>
+    <div class="tip"><span class="tick">✓</span><div><h3>Make the listing feel alive</h3><p>Set your Happy Hour and a "Bartender's Choice" pick so a first-time visitor sees a real, current bar.</p></div></div>
+  </div>
+
+  <div class="group">
+    <h2 class="section"><span class="n rounded">3</span> Keep it working</h2>
+    <div class="tip"><span class="tick">✓</span><div><h3>Ask at the moment of delight</h3><p>Right after a great pour or a comped round is when a tap and a 5-star land — cue it then.</p></div></div>
+    <div class="tip"><span class="tick">✓</span><div><h3>Refresh monthly</h3><p>Rotate your offer and billboard so returning drinkers always find a reason to come back.</p></div></div>
+    <div class="tip"><span class="tick">✓</span><div><h3>Read your dashboard weekly</h3><p>Watch taps, new ratings, and deals redeemed — do more of whatever moved them.</p></div></div>
+  </div>
+
+  <div class="kicker">
+    <div class="big rounded">$59</div>
+    <p><b>Your founding rate is $59/month, locked for a year — cancel anytime.</b> It goes to $79 after, so the sooner {{BARNAME}} is live, the more you lock in.</p>
+  </div>
+
+  <p class="footnote">DrinkMinot · Zero tracking · 100 percent local · Text or call Cody 701-389-5644</p>
+</div>

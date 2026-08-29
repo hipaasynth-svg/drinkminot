@@ -1,0 +1,238 @@
+<meta charset="utf-8">
+<title>DrinkMinot for Owners</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --paper: #FBF9F4; --card: #EFE6D5; --card-edge: #DFD0B4;
+    --espresso: #15313A; --ink: #33474E; --caramel: #B27A21; --caramel-deep: #8A5A12;
+    --stone: #7B776C; --sage: #9A3B4C; --sage-soft: #F6E9E7; --sage-edge: #E7CBC9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #101F24; --card: #182A2F; --card-edge: #2A4149;
+      --espresso: #EAF1EC; --ink: #D3DEDC; --caramel: #D69B3A; --caramel-deep: #E7B25A;
+      --stone: #93A09B; --sage: #D98192; --sage-soft: #2A1D20; --sage-edge: #47313A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #101F24; --card: #182A2F; --card-edge: #2A4149;
+    --espresso: #EAF1EC; --ink: #D3DEDC; --caramel: #D69B3A; --caramel-deep: #E7B25A;
+    --stone: #93A09B; --sage: #D98192; --sage-soft: #2A1D20; --sage-edge: #47313A;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    line-height: 1.28; -webkit-font-smoothing: antialiased;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .rounded { font-family: ui-rounded, "SF Pro Rounded", "Nunito", "Segoe UI", system-ui, sans-serif; }
+  .sheet { width: 8.5in; min-height: 11in; margin: 0 auto; padding: 0.4in 0.55in; }
+
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 2px solid var(--caramel); padding-bottom: 9px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand .mark { height: 54px; width: auto; flex: none; }
+  .wordmark { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; font-weight: 800; font-size: 29px; letter-spacing: -0.02em; line-height: 1; }
+  .wordmark .eat { color: var(--espresso); } .wordmark .minot { color: var(--caramel); } .wordmark .com { color: var(--stone); }
+  .wordmark .tag { display: block; font-size: 11.5px; font-weight: 700; letter-spacing: 0.07em; color: var(--stone); margin-top: 5px; }
+  .forwho { background: var(--caramel); color: var(--paper); font-weight: 800; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; padding: 7px 14px; border-radius: 999px; text-align: center; }
+
+  .hook { margin: 7px 0 2px; }
+  .hook h1 { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; color: var(--espresso); font-weight: 800; font-size: 22px; line-height: 1.1; letter-spacing: -0.015em; text-wrap: balance; margin: 0; max-width: 30ch; }
+  .hook p { font-size: 12px; margin: 6px 0 0; max-width: 88ch; }
+  .hook .em { color: var(--caramel-deep); font-weight: 700; }
+
+  h2.section { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; color: var(--espresso); font-size: 11.5px; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; margin: 0 0 9px; display: flex; align-items: center; gap: 10px; }
+  h2.section::after { content: ""; flex: 1; height: 2px; background: var(--card-edge); border-radius: 2px; }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 9px; }
+
+  .benefit { margin-bottom: 3px; }
+  .benefit h3 { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; color: var(--espresso); font-size: 12.5px; font-weight: 800; margin: 0 0 1px; letter-spacing: -0.01em; display: flex; gap: 7px; align-items: baseline; }
+  .benefit h3 .k { color: var(--caramel); font-size: 11px; font-weight: 900; }
+  .benefit p { margin: 0 0 0 18px; font-size: 11px; }
+
+  .step { display: grid; grid-template-columns: 24px 1fr; gap: 10px; align-items: start; margin-bottom: 4px; }
+  .step .num { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; font-weight: 800; font-size: 12.5px; color: var(--paper); background: var(--caramel); width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; }
+  .step h3 { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; color: var(--espresso); font-size: 12.5px; font-weight: 800; margin: 2px 0 1px; }
+  .step p { margin: 0; font-size: 11px; }
+
+  .pricing { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; margin-top: 9px; }
+  .price { border: 1px solid var(--card-edge); border-radius: 12px; padding: 12px 15px; background: var(--card); }
+  .price h3 { font-size: 9.5px; letter-spacing: 0.11em; text-transform: uppercase; color: var(--caramel-deep); margin: 0 0 3px; font-weight: 800; }
+  .price .amount { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; color: var(--espresso); font-weight: 800; font-size: 23px; letter-spacing: -0.02em; }
+  .price .was { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; font-size: 13px; color: var(--stone); text-decoration: line-through; font-weight: 700; margin-left: 5px; }
+  .price .amount span { font-size: 12px; color: var(--stone); font-weight: 700; }
+  .price .amount.sm { font-size: 16px; }
+  .price p { margin: 5px 0 0; font-size: 10.5px; }
+  .price .roi { margin-top: 5px; font-size: 10.5px; color: var(--caramel-deep); font-weight: 700; }
+
+  /* dashboard stat strip */
+  .dash { margin-top: 8px; border: 1px solid var(--card-edge); border-radius: 12px; background: var(--card); padding: 7px 16px; display: grid; grid-template-columns: auto 1fr 1fr 1fr; gap: 14px; align-items: center; }
+  .dash .lab { font-size: 10px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--caramel-deep); line-height: 1.25; max-width: 15ch; }
+  .stat { text-align: center; border-left: 1px solid var(--card-edge); }
+  .stat .n { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; font-weight: 800; font-size: 21px; letter-spacing: -0.02em; color: var(--espresso); line-height: 1; }
+  .stat .t { font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--stone); margin-top: 2px; }
+
+  .roadmap { margin-top: 8px; display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center; border: 1px solid var(--card-edge); border-left: 4px solid var(--caramel); border-radius: 12px; padding: 9px 16px; background: var(--card); }
+  .roadmap .qr { width: 42px; height: 42px; flex: none; border-radius: 8px; padding: 5px; background: var(--paper); border: 1px solid var(--card-edge); display: block; }
+  .roadmap .qr rect { fill: var(--espresso); }
+  .roadmap .eyebrow { font-size: 9.5px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--caramel-deep); margin: 0 0 2px; }
+  .roadmap h3 { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; color: var(--espresso); font-weight: 800; font-size: 14px; margin: 0 0 2px; letter-spacing: -0.015em; }
+  .roadmap p { margin: 0; font-size: 11px; }
+  .roadmap .em { color: var(--caramel-deep); font-weight: 700; }
+
+  .founding { margin-top: 7px; background: var(--sage-soft); border: 2px solid var(--sage-edge); border-radius: 14px; padding: 7px 18px; }
+  .founding .top { display: flex; align-items: center; gap: 12px; margin-bottom: 5px; flex-wrap: wrap; }
+  .founding .badge { font-size: 9.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--paper); background: var(--sage); padding: 4px 11px; border-radius: 999px; }
+  .founding h2 { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; color: var(--espresso); font-weight: 800; font-size: 16px; margin: 0; letter-spacing: -0.015em; }
+  .founding ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; }
+  .founding li { display: grid; grid-template-columns: 15px 1fr; gap: 8px; font-size: 11px; align-items: start; }
+  .founding li .tick { color: var(--sage); font-weight: 900; font-size: 13px; line-height: 1.15; }
+  .founding li b { color: var(--espresso); }
+
+  .cta { margin-top: 6px; border-top: 2px solid var(--card-edge); padding-top: 7px; display: grid; grid-template-columns: 1fr auto auto; gap: 18px; align-items: center; }
+  .cta .call { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; color: var(--espresso); font-weight: 800; font-size: 16px; margin: 0 0 3px; letter-spacing: -0.01em; }
+  .cta .sub { font-size: 12px; }
+  .cta .sub b { color: var(--espresso); } .cta .sub a { color: var(--caramel-deep); font-weight: 700; text-decoration: none; }
+  .cta .site { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; color: var(--espresso); font-weight: 800; font-size: 15px; text-align: right; }
+  .qrtile { background: #fff; border: 1px solid var(--card-edge); border-radius: 12px; padding: 8px; width: 82px; text-align: center; }
+  .qrtile svg { width: 66px; height: 66px; display: block; margin: 0 auto; }
+  .qrtile span { display: block; font-size: 7.5px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--espresso); margin-top: 3px; }
+
+  .walletbadge { margin-top: 7px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .walletbadge svg { width: 17px; height: 17px; color: var(--caramel); flex: none; }
+  .walletbadge span { font-size: 11px; color: var(--stone); font-weight: 700; letter-spacing: .02em; }
+  .walletbadge b { color: var(--espresso); }
+  .footnote { margin-top: 4px; color: var(--stone); font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; font-weight: 700; text-align: center; }
+
+  @media (max-width: 560px) { .sheet { width: 100%; padding: 24px 20px; } .cols, .pricing, .founding ul { grid-template-columns: 1fr; } .roadmap, .dash, .cta { grid-template-columns: 1fr; } .stat { border-left: none; text-align: left; } }
+  @media print { @page { size: letter; margin: 0.22in; } html, body { background: #fff; } .sheet { width: auto; min-height: 0; margin: 0; padding: 0; } }
+
+  .payback { border-left: 1px solid var(--card-edge); padding-left: 14px; align-self: stretch; display: flex; flex-direction: column; justify-content: center; }
+  .pb-h { font-size: 10px; font-weight: 800; color: var(--caramel-deep); margin: 0 0 6px; letter-spacing: .01em; }
+  .pb-row { display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 7px; margin-bottom: 4px; }
+  .pb-row > span { font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--stone); text-align: right; }
+  .pb-track { position: relative; background: #E5DAC4; border-radius: 5px; height: 15px; overflow: hidden; }
+  .pb-fill { height: 100%; border-radius: 5px; display: flex; align-items: center; }
+  .pb-fill.cost { width: 8%; background: var(--stone); }
+  .pb-fill.ret { width: 100%; background: var(--caramel); }
+  .pb-fill.ret b { color: #fff; font-size: 9px; font-weight: 800; padding-left: 7px; white-space: nowrap; }
+  .pb-out { font-size: 9.5px; font-weight: 800; color: var(--espresso); }
+  .pb-cap { font-size: 8px; color: var(--stone); margin-top: 3px; letter-spacing: .02em; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pb-track { background: #21353B; } }
+  :root[data-theme="dark"] .pb-track { background: #21353B; }
+  .dash { grid-template-columns: auto 1fr 1fr 1fr 2.5fr !important; }
+  .cta { grid-template-columns: 1fr auto auto auto !important; gap: 12px !important; }
+  .qrtile { width: 78px !important; padding: 7px !important; }
+  .qrtile svg { width: 58px !important; height: 58px !important; }
+  .qrtile span { font-size: 7px !important; }
+  .qrtile span i { display: block; font-weight: 600; font-size: 6.5px; letter-spacing: .01em; text-transform: none; color: var(--stone); margin-top: 1px; }
+</style>
+
+<div class="sheet">
+
+  <header class="head">
+    <div class="brand">
+      <img class="mark" alt="DrinkMinot raccoon" src="MASCOT_DATA_URI">
+      <div class="wordmark rounded"><span class="eat">Drink</span><span class="minot">Minot</span><span class="com">.com</span>
+        <span class="tag">tap · rate · earn</span>
+      </div>
+    </div>
+    <div class="forwho"><span style="display:block;font-weight:700;font-size:8.5px;letter-spacing:.08em;opacity:.92">Prepared for</span>{{BARNAME}}</div>
+  </header>
+
+  <section class="hook">
+    <h1>Verified pours, rated by the locals who actually drink here.</h1>
+    <p>DrinkMinot gets more people through your door — and proves it. Real Minot locals <span class="em">tap your bar to rate you</span> — zero apps, zero accounts, zero tracking — then come back for the deal you set. Every tap lands in your dashboard as <span class="em">return you can measure.</span></p>
+  </section>
+
+  <div class="cols">
+    <div>
+      <h2 class="section">Why owners choose it</h2>
+      <div class="benefit"><h3><span class="k">01</span> Zero tracking. Full stop.</h3><p>No app, account, email, or phone number — ever. It never touches your POS and adds no work for your bartenders. One physical tap and they're rating.</p></div>
+      <div class="benefit"><h3><span class="k">02</span> Three punches, one deal</h3><p>Bars run on regulars, so the reward comes fast: three taps = a deal you choose (say, a free well drink or $5 off a tab). The card lives on their phone — nothing to stamp or lose.</p></div>
+      <div class="benefit"><h3><span class="k">03</span> An opening offer that drives votes</h3><p>Launch with a short, limited-time offer to pull new drinkers in and stack up verified ratings fast — while everyone's paying attention.</p></div>
+      <div class="benefit"><h3><span class="k">04</span> Ratings you can't game</h3><p>Upvotes and stars only — one physical tap per phone a day. No downvotes, no comments, no review-bombing. Upvotes fade after 14 days, so your score shows who's hot <b>right now</b>, not last year.</p></div>
+      <div class="benefit"><h3><span class="k">05</span> You control the spotlight</h3><p>A "Bartender's Choice" billboard for your top pours, plus a Happy Hour that flips on by your own schedule — all from one dashboard.</p></div>
+    </div>
+    <div>
+      <h2 class="section">How it works</h2>
+      <div class="step"><div class="num rounded">1</div><div><h3>We get you set up</h3><p>We supply your first four NFC tags/QRs and two cards, plus your live listing — ready to tap the day they land.</p></div></div>
+      <div class="step"><div class="num rounded">2</div><div><h3>Drinkers tap, rate, earn</h3><p>A tap opens straight to your listing. They rate, collect a punch toward your deal, and their verified rating posts instantly.</p></div></div>
+      <div class="step"><div class="num rounded">3</div><div><h3>You run it from one dashboard</h3><p>Password-protected: billboard, Happy Hour, punch deal, opening offer, and profile — change it anytime.</p></div></div>
+
+      <div class="pricing">
+        <div class="price">
+          <h3>Your complete setup</h3>
+          <div class="amount rounded">$59<span>/month</span><s class="was">$79</s></div>
+          <p>Four NFC tags/QRs + two cards, live listing, verified ratings, the three-punch deal card, Happy Hour, and owner dashboard — your <b>founding rate</b>.</p>
+        </div>
+        <div class="price">
+          <h3>Cover every table</h3>
+          <div class="amount sm rounded">At cost</div>
+          <p><b>Recommended:</b> a tap sticker on every table — we provide them at cost, since more surfaces mean more taps. Plaques, extra cards &amp; manager lanyards too, whenever you want them.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dash">
+    <div class="lab">Measurable return <span style="color:var(--stone);font-weight:700">(example month)</span></div>
+    <div class="stat"><div class="n rounded">214</div><div class="t">taps</div></div>
+    <div class="stat"><div class="n rounded">47</div><div class="t">new ratings</div></div>
+    <div class="stat"><div class="n rounded">63</div><div class="t">deals redeemed</div></div>
+    <div class="payback">
+      <div class="pb-h">Your $59 comes back many times over</div>
+      <div class="pb-row"><span>You pay</span><div class="pb-track"><div class="pb-fill cost"></div></div><b class="pb-out">$59</b></div>
+      <div class="pb-row"><span>Comes back</span><div class="pb-track"><div class="pb-fill ret"><b>&#8776;&#8201;$2,300 in repeat tabs</b></div></div><b class="pb-out">&nbsp;</b></div>
+      <div class="pb-cap">63 rewards &#215; 3 visits &#215; ~$12 tab</div>
+    </div>
+  </div>
+
+  <div class="roadmap">
+    <svg class="qr" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="1" y="1" width="7" height="7"></rect><rect x="16" y="1" width="7" height="7"></rect><rect x="1" y="16" width="7" height="7"></rect>
+      <rect x="3" y="3" width="3" height="3" style="fill:var(--paper)"></rect><rect x="18" y="3" width="3" height="3" style="fill:var(--paper)"></rect><rect x="3" y="18" width="3" height="3" style="fill:var(--paper)"></rect>
+      <rect x="11" y="1" width="2" height="2"></rect><rect x="11" y="5" width="2" height="2"></rect><rect x="11" y="10" width="2" height="2"></rect>
+      <rect x="16" y="11" width="2" height="2"></rect><rect x="20" y="11" width="3" height="2"></rect><rect x="11" y="15" width="2" height="2"></rect>
+      <rect x="15" y="16" width="2" height="2"></rect><rect x="19" y="16" width="2" height="2"></rect><rect x="16" y="20" width="2" height="3"></rect><rect x="20" y="19" width="3" height="4"></rect>
+    </svg>
+    <div>
+      <p class="eyebrow">On the roadmap</p>
+      <h3>Hotel-room QRs are coming to Minot</h3>
+      <p>We're building QR tags for Minot hotel rooms — visitors scan from their room and walk straight to your bar. Every piece of DrinkMinot points the same way: <span class="em">more heads through your door, with a return you can actually measure.</span></p>
+    </div>
+  </div>
+
+  <section class="founding">
+    <div class="top">
+      <span class="badge">Only 5 spots · Minot first</span>
+      <h2>Become a Founding Five bar</h2>
+    </div>
+    <ul>
+      <li><span class="tick">✓</span><span><b>One trial month, on us</b> — run the whole system with no monthly charge to start.</span></li>
+      <li><span class="tick">✓</span><span><b>Four NFC tags/QRs + two cards to start</b> — add table stickers at cost.</span></li>
+      <li><span class="tick">✓</span><span><b>A direct hand in the roadmap</b> — your feedback builds what others pay for later, hotel QRs included.</span></li>
+      <li><span class="tick">✓</span><span><b>$59/month locked for a year, cancel anytime</b> — the price goes to $79 after. Only if you love it.</span></li>
+    </ul>
+  </section>
+
+  <div class="cta">
+    <div>
+      <p class="call">Follow the QR for setup and instructions.</p>
+      <p class="sub"><b>Text or call Cody</b> <b>701-389-5644</b> · <a href="mailto:cody@drinkminot.com">cody@drinkminot.com</a> · DrinkMinot.com</p>
+    </div>
+    <div class="qrtile">{{QR_LISTING}}<span>Live page<i>tap &amp; rate</i></span></div>
+    <div class="qrtile">{{QR_SETUP}}<span>First-time setup<i>no password</i></span></div>
+    <div class="qrtile">{{QR_LOGIN}}<span>Owner login<i>your password</i></span></div>
+  </div>
+
+  <div class="walletbadge">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="13" rx="2.6" fill="none" stroke="currentColor" stroke-width="2"></rect><path d="M2 10.5h20" stroke="currentColor" stroke-width="2"></path><circle cx="17" cy="14.8" r="1.5" fill="currentColor"></circle></svg>
+    <span>Your punch card saves to <b>Apple Wallet</b> &amp; <b>Google Wallet</b></span>
+  </div>
+  <p class="footnote">Zero tracking · 100 percent local · Minot's best drinks directory</p>
+
+</div>
