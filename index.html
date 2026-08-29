@@ -890,6 +890,10 @@
     S.init().then(function(r){
       restaurants=r.restaurants;
       var q; try{ q=new URLSearchParams(location.search); }catch(e){ q=null; }
+      // A durable, wipe-proof card (Wallet pass / saved QR) links back with ?dev=<token>
+      // so this phone re-adopts its anonymous card and pulls the backup — even after a wipe.
+      var dev=q&&q.get('dev');
+      if(dev){ S.adoptDevice(dev).then(function(ok){ if(ok){ if($('#tag').classList.contains('show')) renderTagScreen(); else renderTrack(); } }); }
       var sid=q&&q.get('session_id');
       if(sid){ renderTrack(); handleReturn(); return; }
       var oid=q&&q.get('owner');
