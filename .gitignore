@@ -1,3 +1,6 @@
 node_modules/
 preview-*.png
 .vercel
+
+# generated marketing bundles
+marketing/out/

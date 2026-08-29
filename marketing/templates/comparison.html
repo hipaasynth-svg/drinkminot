@@ -1,0 +1,178 @@
+<meta charset="utf-8">
+<title>Punch Card vs. Coin Toss</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --paper: #FBF9F4; --card: #EFE6D5; --card-edge: #DFD0B4;
+    --espresso: #15313A; --ink: #33474E; --caramel: #B27A21; --caramel-deep: #8A5A12;
+    --stone: #7B776C; --sage: #9A3B4C; --sage-soft: #F6E9E7; --sage-edge: #E7CBC9;
+    --win: #A6701C; --win-soft: #F3E7CF; --coin: #3F6069; --track: #E5DAC4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #101F24; --card: #182A2F; --card-edge: #2A4149;
+      --espresso: #EAF1EC; --ink: #D3DEDC; --caramel: #D69B3A; --caramel-deep: #E7B25A;
+      --stone: #93A09B; --sage: #D98192; --sage-soft: #2A1D20; --sage-edge: #47313A;
+      --win: #E0A445; --win-soft: #2C2412; --coin: #7CA6B0; --track: #21353B;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #101F24; --card: #182A2F; --card-edge: #2A4149;
+    --espresso: #EAF1EC; --ink: #D3DEDC; --caramel: #D69B3A; --caramel-deep: #E7B25A;
+    --stone: #93A09B; --sage: #D98192; --sage-soft: #2A1D20; --sage-edge: #47313A;
+    --win: #E0A445; --win-soft: #2C2412; --coin: #7CA6B0; --track: #21353B;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    line-height: 1.3; -webkit-font-smoothing: antialiased;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .rounded { font-family: ui-rounded, "SF Pro Rounded", "Nunito", "Segoe UI", system-ui, sans-serif; }
+  .sheet { width: 8.5in; min-height: 11in; margin: 0 auto; padding: 0.45in 0.6in; }
+
+  /* header */
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 16px;
+          border-bottom: 2px solid var(--caramel); padding-bottom: 10px; }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .brand .mark { height: 46px; width: auto; flex: none; }
+  .wordmark { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; font-weight: 800; font-size: 24px; letter-spacing: -0.02em; line-height: 1; }
+  .wordmark .eat { color: var(--espresso); } .wordmark .minot { color: var(--caramel); } .wordmark .com { color: var(--stone); }
+  .wordmark .tag { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.07em; color: var(--stone); margin-top: 4px; }
+  .forwho { background: var(--caramel); color: var(--paper); font-weight: 800; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 7px 14px; border-radius: 999px; text-align: center; }
+
+  .hook { margin: 13px 0 2px; }
+  .hook h1 { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; color: var(--espresso); font-weight: 800; font-size: 26px; line-height: 1.1; letter-spacing: -0.02em; text-wrap: balance; margin: 0; max-width: 24ch; }
+  .hook p { font-size: 12.5px; margin: 7px 0 0; max-width: 74ch; }
+  .hook .em { color: var(--caramel-deep); font-weight: 700; }
+
+  /* hero tiles */
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 15px; }
+  .tile { border-radius: 14px; padding: 15px 17px; border: 1px solid var(--card-edge); background: var(--card); }
+  .tile.win { border: 2px solid var(--win); background: var(--win-soft); }
+  .tile .eyebrow { font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; margin: 0 0 7px; }
+  .tile.win .eyebrow { color: var(--win); } .tile.coin .eyebrow { color: var(--coin); }
+  .tile .big { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; font-weight: 800; font-size: 30px; letter-spacing: -0.02em; line-height: 1; color: var(--espresso); }
+  .tile.win .big { color: var(--win); } .tile.coin .big { color: var(--coin); }
+  .tile p { margin: 7px 0 0; font-size: 11.5px; }
+
+  h2.section { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; color: var(--espresso); font-size: 12px; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; margin: 16px 0 10px; display: flex; align-items: center; gap: 10px; }
+  h2.section::after { content: ""; flex: 1; height: 2px; background: var(--card-edge); border-radius: 2px; }
+
+  /* bar chart */
+  .chart { margin-top: 4px; }
+  .bar-row { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 12px; margin-bottom: 9px; }
+  .bar-row .name { font-size: 12px; font-weight: 700; color: var(--espresso); text-align: right; }
+  .bar-row .name small { display: block; font-weight: 600; color: var(--stone); font-size: 10px; }
+  .track { position: relative; background: var(--track); border-radius: 6px; height: 32px; display: flex; align-items: center; }
+  .fill { height: 100%; border-radius: 6px; display: flex; align-items: center; justify-content: flex-end; }
+  .fill.win { background: var(--win); } .fill.coin { background: var(--coin); }
+  .val { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; font-weight: 800; font-size: 14px; color: #fff; padding-right: 9px; white-space: nowrap; }
+  .val.out { color: var(--espresso); padding-right: 0; padding-left: 8px; }
+  .chart .cap { font-size: 10.5px; color: var(--stone); margin: 5px 0 0; max-width: 90ch; }
+  .chart .cap b { color: var(--caramel-deep); }
+
+  /* comparison table */
+  table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 11.5px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--card-edge); vertical-align: top; }
+  thead th { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--stone); font-weight: 800; border-bottom: 2px solid var(--card-edge); }
+  thead th.w { color: var(--win); } thead th.c { color: var(--coin); }
+  tbody td:first-child { color: var(--espresso); font-weight: 700; }
+  td.yes { color: var(--espresso); } td.no { color: var(--stone); }
+  .tick { color: var(--win); font-weight: 900; } .dash { color: var(--coin); font-weight: 900; }
+  col.feat { width: 34%; } col.wc { width: 33%; } col.cc { width: 33%; }
+
+  /* bottom callout */
+  .bottom { margin-top: 11px; background: var(--sage-soft); border: 2px solid var(--sage-edge); border-radius: 14px; padding: 11px 18px;
+            display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; }
+  .bottom .lead { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; font-weight: 800; color: var(--sage); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; margin: 0 0 4px; }
+  .bottom h3 { font-family: ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif; color: var(--espresso); font-weight: 800; font-size: 15px; margin: 0 0 5px; letter-spacing: -0.01em; }
+  .bottom p { margin: 0; font-size: 11.5px; }
+  .bottom .cta { margin-top: 8px; font-size: 12px; }
+  .bottom .cta b { color: var(--espresso); } .bottom .cta a { color: var(--caramel-deep); font-weight: 800; text-decoration: none; }
+  .qrtile { background: #fff; border: 1px solid var(--card-edge); border-radius: 12px; padding: 9px; width: 92px; text-align: center; }
+  .qrtile svg { width: 74px; height: 74px; display: block; margin: 0 auto; }
+  .qrtile span { display: block; font-size: 8px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--espresso); margin-top: 4px; }
+
+  .footnote { margin-top: 9px; color: var(--stone); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700; text-align: center; }
+
+  @media (max-width: 560px) { .sheet { width: 100%; padding: 24px 20px; } .tiles, .bottom { grid-template-columns: 1fr; } }
+  @media print { @page { size: letter; margin: 0.3in; } html, body { background: #fff; } .sheet { width: auto; min-height: 0; margin: 0; padding: 0; } }
+</style>
+
+<div class="sheet">
+
+  <header class="head">
+    <div class="brand">
+      <img class="mark" alt="DrinkMinot raccoon" src="MASCOT_DATA_URI">
+      <div class="wordmark rounded"><span class="eat">Drink</span><span class="minot">Minot</span><span class="com">.com</span>
+        <span class="tag">the reward math</span>
+      </div>
+    </div>
+    <div class="forwho">3-punch deal<br>vs. the coin game</div>
+  </header>
+
+  <section class="hook">
+    <h1>A punch card brings them back. A coin toss just gives a drink away.</h1>
+    <p>Same free drink, two very different results. Here's what each one actually buys you — DrinkMinot's <span class="em">3-punch deal card</span> versus a daily <span class="em">two-quarters-in-a-shot-glass</span> game.</p>
+  </section>
+
+  <div class="tiles">
+    <div class="tile win">
+      <p class="eyebrow">3-punch deal card</p>
+      <div class="big rounded">3 paid visits</div>
+      <p>earned <b>before</b> a single free drink goes out — plus 3 ratings, 3 upvotes, and a card that restarts the moment they finish. The reward pulls them back.</p>
+    </div>
+    <div class="tile coin">
+      <p class="eyebrow">two quarters, one shot</p>
+      <div class="big rounded">1 lucky toss</div>
+      <p>a free drink on a roughly 1-in-10 roll, once a day — no return trip required, nothing tracked, and a stranger passing through wins the same as your best regular.</p>
+    </div>
+  </div>
+
+  <h2 class="section">Repeat visits driven — per 100 regulars, per month</h2>
+  <div class="chart">
+    <div class="bar-row">
+      <div class="name">Punch card<small>3 = free drink</small></div>
+      <div class="track"><div class="fill win" style="width:91%"><span class="val">≈ 80 return trips</span></div></div>
+    </div>
+    <div class="bar-row">
+      <div class="name">Coin toss<small>luck, once a day</small></div>
+      <div class="track"><div class="fill coin" style="width:6%"></div><span class="val out">≈ 5</span></div>
+    </div>
+    <p class="cap">Illustrative. Assumes ~40 of 100 regulars chase the 3-punch card, adding ~2 return trips each to finish it; a daily luck game gives people no reason to come back, so repeat visits stay near zero. That's <b>~16× more repeat traffic — and every one of those visits is measured in your dashboard.</b></p>
+  </div>
+
+  <h2 class="section">Side by side</h2>
+  <table>
+    <colgroup><col class="feat"><col class="wc"><col class="cc"></colgroup>
+    <thead><tr><th>What it does for the bar</th><th class="w">Punch card</th><th class="c">Coin toss</th></tr></thead>
+    <tbody>
+      <tr><td>What earns the free drink</td><td class="yes"><span class="tick">✓</span> Three return visits you can count</td><td class="no"><span class="dash">–</span> One lucky toss</td></tr>
+      <tr><td>Guaranteed repeat visits</td><td class="yes"><span class="tick">✓</span> Yes — every card</td><td class="no"><span class="dash">–</span> None</td></tr>
+      <tr><td>Rewards the regulars you already have</td><td class="yes"><span class="tick">✓</span> Pays them for what they already do</td><td class="no"><span class="dash">–</span> Luck ignores loyalty</td></tr>
+      <tr><td>Pulls new customers in</td><td class="yes"><span class="tick">✓</span> Opening offer + a card to finish</td><td class="no"><span class="dash">–</span> One-and-done</td></tr>
+      <tr><td>Ratings &amp; upvotes captured</td><td class="yes"><span class="tick">✓</span> Every single visit</td><td class="no"><span class="dash">–</span> Zero</td></tr>
+      <tr><td>Cost you can predict</td><td class="yes"><span class="tick">✓</span> One free per three paid</td><td class="no"><span class="dash">–</span> Random payout</td></tr>
+      <tr><td>Shows up as measurable return</td><td class="yes"><span class="tick">✓</span> Yes — in your dashboard</td><td class="no"><span class="dash">–</span> No way to know</td></tr>
+    </tbody>
+  </table>
+
+  <div class="bottom">
+    <div>
+      <p class="lead">Bottom line</p>
+      <h3>Only one of these actually grows the bar.</h3>
+      <p>The 3-punch card turns give-aways into guaranteed return trips, rewards the regulars you already have, and lands every tap in your dashboard as measurable return. The coin game is fun — but it just gives drinks away and tells you nothing.</p>
+      <p class="cta"><b>Lock in our founding spot:</b> text or call Cody <b>701-389-5644</b> · <a href="https://drinkminot.com">DrinkMinot.com</a></p>
+    </div>
+    <div class="qrtile">
+      QR_SVG
+      <span>DrinkMinot.com</span>
+    </div>
+  </div>
+
+  <p class="footnote">DrinkMinot · Zero tracking · 100% local · Upvotes fade after 14 days, so your score is always current</p>
+
+</div>
