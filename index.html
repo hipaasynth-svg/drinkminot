@@ -713,19 +713,35 @@
     pcLayout(true); pcRenderDots();
     pcStage.addEventListener('pointerdown',pcOnDown);
   }
+  var wcaps={google:false,apple:false};
+  function walletBtns(){
+    var out='';
+    if(wcaps.google) out += '<button class="btn ghost walletbtn" id="gwBtn" style="margin-top:8px">＋ Add card to Google Wallet</button>';
+    if(wcaps.apple)  out += '<button class="btn ghost walletbtn" id="awBtn" style="margin-top:8px">＋ Add to Apple Wallet</button>';
+    return out;
+  }
+  function wireWallet(r){
+    var g=$('#gwBtn');
+    if(g) g.onclick=function(){
+      g.disabled=true; var t=g.textContent; g.textContent='Creating…';
+      S.walletSave('google', r.id).then(function(res){
+        g.disabled=false; g.textContent=t;
+        if(res&&res.saveUrl){ window.open(res.saveUrl,'_blank','noopener'); }
+        else { toast('Wallet not ready — try again'); }
+      });
+    };
+    var a=$('#awBtn'); if(a) a.onclick=function(){ toast('Apple Wallet coming soon'); };
+  }
   function renderTagFoot(){
     var r = S.get(tagId); if(!r) return;
     var host = $('#tagFoot');
-    if(!tagVerified){
-      host.innerHTML = '<div class="ratedmsg" style="color:var(--muted)">👀 Preview — tap our tag in-store to rate</div>';
-      return;
-    }
-    if(S.ratedRecently(r.id)){
-      host.innerHTML = '<div class="ratedmsg">✓ Rated — thanks! Come back in 24h.</div>';
-      return;
-    }
-    host.innerHTML = '<button class="btn accent" id="rateBtn">Rate this visit ★</button>';
+    var main;
+    if(!tagVerified){ main = '<div class="ratedmsg" style="color:var(--muted)">👀 Preview — tap our tag in-store to rate</div>'; }
+    else if(S.ratedRecently(r.id)){ main = '<div class="ratedmsg">✓ Rated — thanks! Come back in 24h.</div>'; }
+    else { main = '<button class="btn accent" id="rateBtn">Rate this visit ★</button>'; }
+    host.innerHTML = main + walletBtns();
     var rb=$('#rateBtn'); if(rb) rb.onclick = openOverlay;
+    wireWallet(r);
   }
 
   /* ---------- owner ---------- */
@@ -889,6 +905,7 @@
 
     S.init().then(function(r){
       restaurants=r.restaurants;
+      S.walletCaps().then(function(c){ wcaps=c||wcaps; if($('#tag').classList.contains('show')) renderTagFoot(); });
       var q; try{ q=new URLSearchParams(location.search); }catch(e){ q=null; }
       // A durable, wipe-proof card (Wallet pass / saved QR) links back with ?dev=<token>
       // so this phone re-adopts its anonymous card and pulls the backup — even after a wipe.
