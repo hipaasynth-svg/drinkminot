@@ -497,6 +497,21 @@
   }
   function setAdminPasswordLocal(pw) { try { global.localStorage.setItem(AKEY, pw); return true; } catch (e) { return false; } }
 
+  /* ---------- wallet passes ---------- */
+  // Which "Add to Wallet" buttons the server can issue right now (env-gated).
+  function walletCaps() {
+    return api('pass', 'GET').then(function (res) {
+      return (res.ok && res.data) ? { google: !!res.data.google, apple: !!res.data.apple } : { google: false, apple: false };
+    }).catch(function () { return { google: false, apple: false }; });
+  }
+  // Create/refresh this device's card for a venue and get its Add-to-Wallet link.
+  function walletSave(provider, venueId) {
+    var d = loadDevice(), rec = d.perRest[venueId] || { done: 0, total: 3 };
+    return api('pass', 'POST', { provider: provider, dev: d.deviceId, venueId: venueId, done: rec.done || 0, total: rec.total || 3 })
+      .then(function (res) { return (res.ok && res.data) ? res.data : { error: (res.data && res.data.error) || 'error' }; })
+      .catch(function () { return { error: 'network' }; });
+  }
+
   global.DrinkStore = {
     RATE_WINDOW_MS: RATE_WINDOW_MS,
     init: init, refresh: refresh, mode: function () { return mode; }, isServer: function () { return mode === 'server'; },
@@ -504,6 +519,7 @@
     getPickPhoto: getPickPhoto, clearPickPhoto: clearPickPhoto,
     rate: rate, ratedRecently: ratedRecently, deviceRec: deviceRec, recordTap: recordTap, pendingTap: pendingTap,
     deviceId: function () { return loadDevice().deviceId; }, deviceBackup: deviceBackup, deviceRestore: deviceRestore, adoptDevice: adoptDevice,
+    walletCaps: walletCaps, walletSave: walletSave,
     ownerLogin: ownerLogin, ownerClaim: ownerClaim, ownerUpdate: ownerUpdate, ownerPhoto: ownerPhoto, ownerPickPhoto: ownerPickPhoto,
     checkout: checkout, confirmUpgrade: confirmUpgrade,
     adminList: adminList, adminPhoto: adminPhoto, adminRemovePhoto: adminRemovePhoto,
