@@ -92,6 +92,8 @@
   .eatlink{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:#E8703F;background:rgba(213,87,43,.14);border:1px solid rgba(213,87,43,.34);padding:3px 8px;border-radius:20px}
   .title{font-size:21px;font-weight:800;letter-spacing:-.01em}
   .meta{font-size:13px;color:var(--muted);margin-top:3px;line-height:1.4}
+  .dirBtn{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:800;color:var(--accent);background:rgba(198,161,91,.14);border:1px solid rgba(198,161,91,.3);padding:5px 10px;border-radius:20px;margin-top:7px;text-decoration:none;-webkit-user-select:none;user-select:none}
+  .dirBtn:active{background:rgba(198,161,91,.24)}
   .row{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--cream);border-radius:12px;padding:11px 14px}
   .lbl{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.02em;text-transform:uppercase}
   .num{font-size:20px;font-weight:800;margin-top:2px}
@@ -310,6 +312,20 @@
     return S.isRated(r) ? '<div class="starsrow">'+starsSvg(r.rating,size)+'</div>'
                         : '<div class="newrate">✨ New — be the first to rate</div>';
   }
+  // A real street address starts with a number ("30 1st St NE…"); placeholders like
+  // "Minot, ND" don't, so the button only appears once a venue's address is confirmed —
+  // never routing someone to a vague pin.
+  function hasRealAddress(r){ return !!(r && r.address && /^\d/.test(r.address.trim())); }
+  function mapsUrl(r){ return 'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(r.address); }
+  function directionsBtn(r){
+    return hasRealAddress(r) ? '<a class="dirBtn" data-dir href="'+mapsUrl(r)+'" target="_blank" rel="noopener">📍 Get directions</a>' : '';
+  }
+  // The Rolodex card sits inside a draggable carousel (#stage) whose pointerdown handler
+  // treats any tap as a swipe/select gesture — stop it there so tapping the button opens
+  // the link instead of being swallowed as a card tap.
+  function wireDirections(){
+    document.querySelectorAll('[data-dir]').forEach(function(el){ el.onpointerdown=function(e){ e.stopPropagation(); }; });
+  }
   // The 21+ sticker for bars / alcohol establishments — its own small "thumbnail spot"
   // in the hero. Only rendered when the venue is flagged over21 in the frozen list.
   function sticker21(r){ return r.over21 ? '<div class="sticker21"><b>21+</b><i>only</i></div>' : ''; }
@@ -345,7 +361,7 @@
         ratingRow(r,18)+sticker21(r)+claim+neon+
       '</div>'+
       '<div class="body lean">'+
-        '<div>'+catRow(r)+'<div class="title">'+esc(r.name)+'</div><div class="meta">'+esc(r.hours)+'</div></div>'+
+        '<div>'+catRow(r)+'<div class="title">'+esc(r.name)+'</div><div class="meta">'+esc(r.hours)+'</div>'+directionsBtn(r)+'</div>'+
         teaser+
         '<div class="row"><div><div class="lbl">Verified ratings</div><div class="num">'+r.totalRatings+'</div></div></div>'+
         tapHint+
@@ -378,7 +394,7 @@
         ratingRow(r,18)+sticker21(r)+claim+neon+
       '</div>'+
       '<div class="body full">'+
-        '<div>'+catRow(r)+'<div class="title">'+esc(r.name)+'</div><div class="meta">'+esc(r.address)+' · '+esc(r.hours)+'</div></div>'+
+        '<div>'+catRow(r)+'<div class="title">'+esc(r.name)+'</div><div class="meta">'+esc(r.address)+' · '+esc(r.hours)+'</div>'+directionsBtn(r)+'</div>'+
         hhbar+
         '<div class="row"><div><div class="lbl">Verified ratings</div><div class="num">'+r.totalRatings+'</div></div>'+
           '<div style="text-align:right"><div class="lbl">Your punches</div><div class="ticks">'+ticks+'</div>'+
@@ -406,6 +422,7 @@
     lastSection=null;   // force the section label to repaint for the new track
     renderDots(); layout(true); loadHeroes(); renderResumeBar();
     updateSectionHead(index);
+    wireDirections();
   }
   // Resumable "Rate <name> now →" pill: shown on the home screen for up to 2h after
   // a real tag tap (S.recordTap in enterTagMode), so browsing away mid-visit doesn't
@@ -632,6 +649,7 @@
                         // stage than the page will actually end up with.
     fitTagCard();
     initPickCarousel();
+    wireDirections();
   }
   // Steps the card through progressively denser layouts (.compact, then .tight —
   // see CSS) until its natural height fits the visible stage, so the page fits one
