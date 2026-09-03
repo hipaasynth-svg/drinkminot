@@ -122,12 +122,27 @@ async function googleSave(token, venueId, venueName, done, total) {
   return { ok: true, saveUrl: saveUrl(token, venueId, sa) };
 }
 
-// Best-effort balance refresh (used when punches change). Never throws.
+// Patch an existing card's balance WITHOUT creating one. Returns false if the customer
+// never added this card (nothing to update) — so a punch never mints a pass nobody asked
+// for. Used for the auto-update-on-punch path.
+async function patchObjectIfExists(tok, token, venueId, venueName, done, total) {
+  var id = objectId(token, venueId);
+  var g = await fetch(WOBASE + '/loyaltyObject/' + encodeURIComponent(id), { headers: { Authorization: 'Bearer ' + tok } });
+  if (g.status !== 200) return false;
+  await fetch(WOBASE + '/loyaltyObject/' + encodeURIComponent(id), {
+    method: 'PATCH', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+    body: JSON.stringify(objectBody(token, venueId, venueName, done, total))
+  });
+  return true;
+}
+
+// Best-effort balance refresh when punches change. Only touches a card the customer has
+// already added; never creates one, never throws.
 async function googlePatch(token, venueId, venueName, done, total) {
   try {
     var sa = loadSA(); if (!sa || !issuerId()) return;
     var tok = await accessToken(sa);
-    await upsertObject(tok, token, venueId, venueName, done, total);
+    await patchObjectIfExists(tok, token, venueId, venueName, done, total);
   } catch (e) { /* non-fatal */ }
 }
 

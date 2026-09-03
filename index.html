@@ -52,6 +52,7 @@
   .stats b{font-size:40px;font-weight:800;color:rgba(255,255,255,.95);letter-spacing:-.02em;line-height:1}
   .stats s{font-size:13px;font-weight:700;color:rgba(255,255,255,.85);text-decoration:none}
   .starsrow{position:absolute;right:14px;bottom:16px;display:flex;gap:2px;pointer-events:none}
+  .newrate{position:absolute;right:14px;bottom:14px;font-size:11px;font-weight:800;color:rgba(255,255,255,.96);background:rgba(0,0,0,.30);padding:4px 9px;border-radius:20px;pointer-events:none;letter-spacing:.2px}
   /* 21+ sticker — the small round "must be 21" mark shown on every bar / alcohol
      establishment (over21). It sits in the hero's top-left "thumbnail spot". */
   .sticker21{position:absolute;left:12px;top:12px;width:44px;height:44px;border-radius:50%;
@@ -305,6 +306,11 @@
     for(var i=0;i<5;i++){ var f=i<Math.round(rating)?'rgba(255,255,255,.95)':'rgba(255,255,255,.35)'; out+='<svg width="'+size+'" height="'+size+'" viewBox="0 0 20 20" style="opacity:.9"><path d="'+STAR+'" fill="'+f+'"></path></svg>'; }
     return out;
   }
+  // Show a star average only once a venue has enough real reviews; below that, a "New" pill.
+  function ratingRow(r,size){
+    return S.isRated(r) ? '<div class="starsrow">'+starsSvg(r.rating,size)+'</div>'
+                        : '<div class="newrate">✨ New — be the first to rate</div>';
+  }
   // The 21+ sticker for bars / alcohol establishments — its own small "thumbnail spot"
   // in the hero. Only rendered when the venue is flagged over21 in the frozen list.
   function sticker21(r){ return r.over21 ? '<div class="sticker21"><b>21+</b><i>only</i></div>' : ''; }
@@ -337,7 +343,7 @@
     var tapHint = r.paid ? '<div class="tapHint">Tap to see all picks →</div>' : '';
     return '<div class="hero" data-hero="'+r.id+'">'+
         '<div class="stats"><b>'+S.fmtNum(r.upvotes)+'</b><s>upvotes</s></div>'+
-        '<div class="starsrow">'+starsSvg(r.rating,18)+'</div>'+sticker21(r)+claim+neon+
+        ratingRow(r,18)+sticker21(r)+claim+neon+
       '</div>'+
       '<div class="body lean">'+
         '<div>'+catRow(r)+'<div class="title">'+esc(r.name)+'</div><div class="meta">'+esc(r.hours)+'</div></div>'+
@@ -362,21 +368,22 @@
       r.picks.map(function(p,i){ return (p&&p.trim()) ? '<div class="pcSlide"><div class="pcCard"><div class="pcPhoto" data-pickphoto="'+r.id+':'+i+'"><div class="pcPh">Photo</div></div><div class="pcText">'+esc(p)+'</div></div></div>' : ''; }).join('')+
       '</div></div><div class="pcDots" id="pcDots"></div></div>' : '';
     var hhbar = (r.paid && happy) ? '<div class="hhbar"><div class="t">⚡ Happy hour now</div><div class="s">'+esc(r.happyHour.special||'')+' · til '+S.to12h(r.happyHour.end)+'</div></div>' : '';
+    var need=S.punchesFor(r), done=Math.min(rec.done, need);
     var ticks='';
-    for(var i=0;i<(rec.total||3);i++){ ticks+='<div class="tick'+(i<rec.done?' on':'')+'"></div>'; }
+    for(var i=0;i<need;i++){ ticks+='<div class="tick'+(i<done?' on':'')+'"></div>'; }
     var couponActive = rec.coupon && rec.coupon.expiresAt>Date.now();
     var coupon = couponActive ? '<div class="coupon"><div><div style="font-size:12px;font-weight:800;color:#7CE05C">'+esc(rec.coupon.reward||'Reward earned!')+'</div><div style="font-size:11px;color:#9FE88C;font-weight:700;margin-top:2px">Code '+esc(rec.coupon.code)+' · exp '+new Date(rec.coupon.expiresAt).toLocaleDateString(undefined,{month:'short',day:'numeric'})+'</div></div><div style="font-size:10px;font-weight:800;color:#1a1430;background:#7CE05C;padding:5px 9px;border-radius:20px">EARNED</div></div>' : '';
 
     return '<div class="hero" data-hero="'+r.id+'">'+
         '<div class="stats"><b>'+S.fmtNum(r.upvotes)+'</b><s>upvotes</s></div>'+
-        '<div class="starsrow">'+starsSvg(r.rating,18)+'</div>'+sticker21(r)+claim+neon+
+        ratingRow(r,18)+sticker21(r)+claim+neon+
       '</div>'+
       '<div class="body full">'+
         '<div>'+catRow(r)+'<div class="title">'+esc(r.name)+'</div><div class="meta">'+esc(r.address)+' · '+esc(r.hours)+'</div></div>'+
         hhbar+
         '<div class="row"><div><div class="lbl">Verified ratings</div><div class="num">'+r.totalRatings+'</div></div>'+
           '<div style="text-align:right"><div class="lbl">Your punches</div><div class="ticks">'+ticks+'</div>'+
-          '<div class="lbl" style="text-transform:none;margin-top:4px">'+rec.done+'/'+(rec.total||3)+'</div></div></div>'+
+          '<div class="lbl" style="text-transform:none;margin-top:4px">'+done+'/'+need+'</div></div></div>'+
         billboard+coupon+
       '</div>';
   }
@@ -799,7 +806,8 @@
       photoBlock+
       sec('House Picks billboard'+(paid?'':' (paid)'), (paid?'':'<div class="lbl" style="text-transform:none;margin-bottom:6px">Upgrade to publish these on your card.</div>')+pick(0,r,paid)+pick(1,r,paid)+pick(2,r,paid))+
       sec('Happy hour', happyBlock(r))+
-      sec('Punch card', fld('Reward (3 punches = reward)','<input type="text" id="fReward" value="'+esc(r.reward||'')+'">')+fld('Coupon valid for (days)','<input type="number" min="1" id="fDays" value="'+(r.couponValidDays||14)+'" style="width:110px">'))+
+      sec('Punch card', fld('Reward','<input type="text" id="fReward" value="'+esc(r.reward||'')+'">')+fld('Punches needed for reward',punchesSelect(r))+fld('Coupon valid for (days)','<input type="number" min="1" id="fDays" value="'+(r.couponValidDays||14)+'" style="width:110px">'))+
+      sec('Minot&rsquo;s Most Wanted'+(r.featured?' ★':''), (r.featured?'<div class="lbl" style="text-transform:none;margin-bottom:6px">You&rsquo;re in the Spotlight — this exclusive offer shows on the curated guide.</div>':'<div class="lbl" style="text-transform:none;margin-bottom:6px">A featured-spotlight perk. Guests show their phone before ordering to redeem.</div>')+fld('Exclusive DrinkMinot offer','<input type="text" id="fOffer" maxlength="90" value="'+esc(r.offer||'')+'" placeholder="e.g. Free house pour with any purchase">'))+
       sec('Details', fld('Owner note','<textarea id="fNote" rows="3">'+esc(r.note||'')+'</textarea>')+fld('Website','<input type="text" id="fWebsite" value="'+esc(r.website||'')+'" placeholder="yourplace.com">'))+
       fld('Change password','<input type="password" id="fPw" placeholder="leave blank to keep current">')+
       '<button class="btn accent" id="ownerSave">Save changes</button>'+
@@ -828,6 +836,11 @@
   }
   function sec(t,inner){ return '<div class="field"><span>'+esc(t)+'</span>'+inner+'</div>'; }
   function fld(l,inner){ return '<label class="field"><span style="font-weight:700;color:var(--muted)">'+esc(l)+'</span>'+inner+'</label>'; }
+  function punchesSelect(r){
+    var cur=S.punchesFor(r), opts='';
+    for(var n=S.MIN_PUNCHES;n<=S.MAX_PUNCHES;n++){ opts+='<option value="'+n+'"'+(n===cur?' selected':'')+'>'+n+' punches</option>'; }
+    return '<select id="fPunches" style="width:150px">'+opts+'</select>';
+  }
   function pick(i,r,paid){
     var v=(r.picks&&r.picks[i])||'';
     var photoBtn = paid ? '<label class="pickPhotoBtn"><div class="pickThumb" id="pickThumb'+i+'">'+(r.hasPickPhoto&&r.hasPickPhoto[i]?'':'Photo')+'</div><input type="file" accept="image/*" data-pickfile="'+i+'" style="display:none"></label>' : '';
@@ -854,7 +867,7 @@
     var picks=[]; document.querySelectorAll('[data-pick]').forEach(function(el){ picks[parseInt(el.getAttribute('data-pick'),10)]=el.value; });
     var days=[]; document.querySelectorAll('#hhDays .day.on').forEach(function(el){ days.push(parseInt(el.getAttribute('data-day'),10)); });
     var np=$('#fPw')?$('#fPw').value:'';
-    var fields={ picks:picks, reward:$('#fReward').value, couponValidDays:Math.max(1,parseInt($('#fDays').value,10)||1),
+    var fields={ picks:picks, reward:$('#fReward').value, offer:($('#fOffer')?$('#fOffer').value:''), punchesNeeded:S.clampPunches($('#fPunches').value), couponValidDays:Math.max(1,parseInt($('#fDays').value,10)||1),
       note:$('#fNote').value, website:$('#fWebsite').value,
       happyHour:{ enabled:$('#hhOn').checked, days:days, start:$('#hhStart').value||'15:00', end:$('#hhEnd').value||'18:00', special:$('#hhSpecial').value } };
     if(np && np.trim()) fields.password=np.trim();

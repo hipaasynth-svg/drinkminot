@@ -95,6 +95,13 @@ var RAW = [
 function slug(name) { return String(name).toLowerCase().replace(/[^a-z0-9]/g, ''); }
 function defaultPassword(name) { return slug(name) + '26'; }
 
+// Real star average (0 when there are no ratings). The client only *shows* it once a venue
+// has MIN_RATINGS verified reviews — see store.js isRated — otherwise it shows "New to DrinkMinot".
+function avgRating(v) { var c = v && v.ratingCount ? v.ratingCount : 0; return c ? Math.round((v.ratingSum / c) * 10) / 10 : 0; }
+// Owner-settable punches-needed, always clamped to these bounds (mirrors store.js).
+var MIN_PUNCHES = 2, MAX_PUNCHES = 5, DEFAULT_PUNCHES = 3;
+function clampPunches(n) { n = parseInt(n, 10); return (n >= MIN_PUNCHES && n <= MAX_PUNCHES) ? n : DEFAULT_PUNCHES; }
+
 /* ---------- password hashing (salted SHA-256, no plaintext at rest) ---------- */
 function hashPw(pw) {
   var salt = crypto.randomBytes(9).toString('hex');
@@ -155,13 +162,14 @@ function seedProfile(id) {
   return {
     id: id, name: name, address: row[1], hours: row[2],
     category: row[3], over21: !!row[4], alsoOnEat: !!row[5],
-    claimed: claimed, paid: claimed, password: hashPw(defaultPassword(name)),
+    claimed: claimed, paid: claimed, featured: claimed, hidden: false, password: hashPw(defaultPassword(name)),
     stripeCustomerId: null, stripeSubscriptionId: null,
     hasPhoto: false, hasPickPhoto: [false, false, false],
     picks: claimed ? ['Cold beer cave', 'ND craft & local cans', 'Weekend wine tasting'] : ['', '', ''],
     note: claimed ? 'Locally owned — thanks for drinking local, Minot!' : '',
     website: claimed ? 'broadwayliquor.com' : '',
-    reward: 'Free item on your 3rd punch', couponValidDays: 14,
+    reward: 'Free item on your 3rd punch', couponValidDays: 14, punchesNeeded: DEFAULT_PUNCHES,
+    offer: claimed ? 'Locals-only deal — show your DrinkMinot screen before you order' : '',
     happyHour: claimed
       ? { enabled: true, days: [0, 1, 2, 3, 4, 5, 6], start: '15:00', end: '18:00', special: '$1 off six-packs' }
       : { enabled: false, days: [1, 2, 3, 4, 5], start: '15:00', end: '18:00', special: '' }
@@ -216,6 +224,9 @@ function flatToObj(flat, base) {
 // already saved — normalize so older data can't crash a read that expects them.
 function normalizeProfile(p) {
   if (!Array.isArray(p.hasPickPhoto) || p.hasPickPhoto.length !== 3) p.hasPickPhoto = [false, false, false];
+  if (typeof p.featured !== 'boolean') p.featured = false;
+  if (typeof p.hidden !== 'boolean') p.hidden = false;
+  if (typeof p.offer !== 'string') p.offer = '';
   // Backfill the static list attributes for profiles saved before these fields existed.
   var row = RAW[p.id - 1];
   if (row) {
@@ -317,10 +328,10 @@ async function resetAll() {
 function publicView(list) {
   return {
     persistent: persistent(),
-    restaurants: list.map(function (r) {
+    restaurants: list.filter(function (r) { return !r.hidden; }).map(function (r) {
       var o = {}; for (var k in r) o[k] = r[k];
       delete o.password;
-      o.rating = r.ratingCount ? Math.round((r.ratingSum / r.ratingCount) * 10) / 10 : 0;
+      o.rating = avgRating(r);
       return o;
     })
   };
@@ -382,6 +393,7 @@ module.exports = {
   persistent: persistent, hasKV: hasKV,
   kvGet: kvGet, kvSet: kvSet, kvDel: kvDel,
   getProfile: getProfile, saveProfile: saveProfile, updateProfile: updateProfile,
+  clampPunches: clampPunches, avgRating: avgRating,
   getVotes: getVotes, incrementVotes: incrementVotes,
   getRestaurant: getRestaurant, getAllRestaurants: getAllRestaurants, resetAll: resetAll,
   publicView: publicView,

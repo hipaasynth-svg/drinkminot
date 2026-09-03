@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Minot's Most Wanted — DrinkMinot</title>
+<meta name="description" content="Minot's Most Wanted — a hand-picked guide to the best local bars, taprooms and bottle shops, verified by the people who actually drink here.">
+<style>
+  :root{--bg:#151226;--ink:#F3EFFA;--muted:#9A93B4;--faint:#6E6790;--card:#211C3B;--cream:#2A2448;--accent:#C6A15B;--gold-d:#E9CE93;--line:rgba(255,255,255,.08)}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:680px;margin:0 auto;padding:22px 16px 48px}
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+  .brand .wm{font-size:22px;font-weight:800;letter-spacing:-.3px}
+  .brand .wm b{color:var(--accent)}
+  .cobrand{font-size:12px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);margin:14px 0 2px}
+  h1{font-size:30px;font-weight:800;letter-spacing:-.6px;margin:6px 0 6px;line-height:1.05}
+  h1 .star{color:var(--accent)}
+  .sub{font-size:14px;line-height:1.5;color:var(--muted);font-weight:600;margin:0 0 4px;max-width:34em}
+  .rule{height:2px;background:linear-gradient(90deg,var(--accent),transparent);border-radius:2px;margin:16px 0 6px}
+  .seclbl{font-size:12px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);margin:22px 0 10px;display:flex;align-items:center;gap:8px}
+  .seclbl::after{content:"";flex:1;height:1px;background:var(--line)}
+  .list{display:flex;flex-direction:column;gap:12px}
+  .card{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;text-decoration:none;color:inherit;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .08s}
+  .card:active{transform:scale(.99)}
+  .card.sp{border-color:rgba(198,161,91,.45);box-shadow:0 2px 14px rgba(198,161,91,.18)}
+  .top{display:flex}
+  .thumb{width:104px;flex:none;align-self:stretch;background:#2A2448 center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:10px;font-weight:800;text-align:center;padding:6px}
+  .body{flex:1;min-width:0;padding:12px 14px;position:relative}
+  .offer{margin:0 12px 12px;padding:10px 12px;background:rgba(198,161,91,.12);border:1px solid rgba(198,161,91,.35);border-radius:11px}
+  .ol{font-size:10px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--accent)}
+  .ot{font-size:14px;font-weight:800;color:var(--gold-d);margin:2px 0 4px;line-height:1.2}
+  .oh{font-size:11px;font-weight:700;color:var(--gold-d);line-height:1.35}
+  .oh b{font-weight:800}
+  .cat{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--accent)}
+  .nm{font-size:17px;font-weight:800;line-height:1.15;margin:2px 0 3px}
+  .meta{font-size:12px;color:var(--muted);font-weight:600;line-height:1.35}
+  .rowb{display:flex;align-items:center;gap:10px;margin-top:7px;flex-wrap:wrap}
+  .stars{display:inline-flex;gap:1px}
+  .stars svg{width:14px;height:14px}
+  .rc{font-size:11px;font-weight:700;color:var(--muted)}
+  .newrate{font-size:11.5px;font-weight:800;color:var(--accent)}
+  .s21{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.4px;color:#151226;background:var(--accent);padding:2px 6px;border-radius:20px}
+  .spot{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#151226;background:var(--accent);padding:3px 8px;border-radius:20px;position:absolute;top:12px;right:12px}
+  .hh{display:inline-block;font-size:10px;font-weight:800;color:var(--gold-d);background:rgba(198,161,91,.14);border:1px solid rgba(198,161,91,.3);padding:2px 7px;border-radius:20px}
+  .cta{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;color:var(--accent);margin-top:2px}
+  .empty{background:var(--cream);border:1px dashed var(--line);border-radius:14px;padding:22px;text-align:center;color:var(--muted);font-weight:600;font-size:13px}
+  .foot{margin-top:26px;padding-top:14px;border-top:1px solid var(--line);text-align:center;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.3px}
+  .foot a{color:var(--accent);text-decoration:none;font-weight:800}
+  .tiny{font-size:9.5px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><div class="wm">Drink<b>Minot</b>.com</div></div>
+  <div id="cobrand" class="cobrand" style="display:none"></div>
+  <h1>Minot&rsquo;s <span class="star">★</span> Most Wanted</h1>
+  <p class="sub">A hand-picked guide to Minot&rsquo;s best bars, taprooms and bottle shops &mdash; verified by the people who actually drink here. Our three Spotlight spots include an <b style="color:var(--gold-d)">exclusive DrinkMinot offer</b>: just show your phone before you order.</p>
+  <div class="rule"></div>
+  <div id="content"></div>
+  <div class="foot">
+    Powered by <a href="./index.html">DrinkMinot.com</a> &mdash; Minot&rsquo;s verified local drinks directory
+    <div class="tiny">Zero tracking · 100% local · 21+</div>
+  </div>
+</div>
+
+<script src="./store.js"></script>
+<script>
+(function(){
+  'use strict';
+  var S=window.DrinkStore, $=function(s){return document.querySelector(s);};
+  var STAR="M10 1.2l2.6 5.4 5.9.9-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.2 5.9-.9z";
+  var MIN_CARDS=6, SPOTLIGHT_MAX=3;
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function starsSvg(rating){
+    var out='<span class="stars">';
+    for(var i=0;i<5;i++){ var f=i<Math.round(rating)?'#C6A15B':'rgba(255,255,255,.18)'; out+='<svg viewBox="0 0 20 20"><path d="'+STAR+'" fill="'+f+'"></path></svg>'; }
+    return out+'</span>';
+  }
+  function byRating(a,b){ return (b.rating||0)-(a.rating||0) || (b.totalRatings||0)-(a.totalRatings||0); }
+  function card(r, spotlight){
+    var happy = S.isHappyHourNow(r);
+    var hh = happy ? '<span class="hh">⚡ Happy hour now</span>' : '';
+    var s21 = r.over21 ? '<span class="s21">21+</span>' : '';
+    var spot = spotlight ? '<span class="spot">★ Spotlight</span>' : '';
+    // Exclusive DrinkMinot offer — spotlight spots only. Redeemed by showing the screen.
+    var offer = (spotlight && r.offer && r.offer.trim()) ?
+      '<div class="offer"><div class="ol">★ Exclusive DrinkMinot offer</div><div class="ot">'+esc(r.offer)+'</div>'+
+      '<div class="oh">📱 Show this screen <b>before you order</b> to redeem.</div></div>' : '';
+    var a=document.createElement('a');
+    a.className='card'+(spotlight?' sp':''); a.href='./index.html?r='+r.id;
+    a.innerHTML=
+      '<div class="top">'+
+        '<div class="thumb" data-thumb="'+r.id+'">'+(r.hasPhoto?'':esc(r.category||'Minot'))+'</div>'+
+        '<div class="body">'+spot+
+          (r.category?'<div class="cat">'+esc(r.category)+'</div>':'')+
+          '<div class="nm">'+esc(r.name)+'</div>'+
+          '<div class="meta">'+esc(r.address)+'</div>'+
+          '<div class="rowb">'+(S.isRated(r)?starsSvg(r.rating)+'<span class="rc">'+(r.totalRatings||0)+' ratings</span>':'<span class="newrate">✨ New — be the first to rate</span>')+s21+hh+'</div>'+
+          '<div class="cta">See page &amp; rate →</div>'+
+        '</div>'+
+      '</div>'+offer;
+    return a;
+  }
+  function loadThumbs(){
+    document.querySelectorAll('[data-thumb]').forEach(function(el){
+      var id=parseInt(el.getAttribute('data-thumb'),10);
+      S.getPhoto(id).then(function(u){ if(u){ el.style.backgroundImage='url('+u+')'; el.textContent=''; } });
+    });
+  }
+  function render(){
+    var all=S.list();
+    var featured=all.filter(function(r){return r.featured;}).sort(byRating).slice(0,SPOTLIGHT_MAX);
+    var host=$('#content'); host.innerHTML='';
+    if(featured.length){
+      var lbl=document.createElement('div'); lbl.className='seclbl'; lbl.textContent='The Spotlight — 3 exclusive spots';
+      var grid=document.createElement('div'); grid.className='list';
+      featured.forEach(function(r){ grid.appendChild(card(r,true)); });
+      host.appendChild(lbl); host.appendChild(grid);
+    }
+    // Backfill so a guest never lands on a thin page — top-rated, non-featured.
+    var need=MIN_CARDS-featured.length;
+    if(need>0){
+      var rest=all.filter(function(r){return !r.featured;}).sort(byRating).slice(0,need);
+      if(rest.length){
+        var lbl2=document.createElement('div'); lbl2.className='seclbl'; lbl2.textContent=featured.length?'More Minot favorites':'Minot favorites';
+        var grid2=document.createElement('div'); grid2.className='list';
+        rest.forEach(function(r){ grid2.appendChild(card(r,false)); });
+        host.appendChild(lbl2); host.appendChild(grid2);
+      }
+    }
+    if(!host.children.length){ host.innerHTML='<div class="empty">Our picks are coming soon — check back shortly.</div>'; }
+    loadThumbs();
+  }
+  // Optional per-hotel co-brand: ?hotel=Vegas+Inn -> "Vegas Inn × DrinkMinot"
+  try{
+    var q=new URLSearchParams(location.search), hotel=q.get('hotel');
+    if(hotel){ var el=$('#cobrand'); el.textContent=esc(hotel).slice(0,60)+' × DrinkMinot'; el.style.display='block'; }
+  }catch(e){}
+  S.init().then(render);
+})();
+</script>
+<script defer src="https://cdn.vercel-insights.com/v1/script.js"></script>
+</body>
+</html>

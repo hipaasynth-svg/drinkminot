@@ -64,8 +64,10 @@ module.exports = async function (req, res) {
     }
     if (b.action === 'setFlag') {
       await L.updateProfile(profile.id, function (r) {
-        if (typeof b.claimed === 'boolean') { r.claimed = b.claimed; if (!r.claimed) r.paid = false; }
+        if (typeof b.claimed === 'boolean') { r.claimed = b.claimed; if (!r.claimed) { r.paid = false; r.featured = false; } }
         if (typeof b.paid === 'boolean') { r.paid = b.paid; if (r.paid) r.claimed = true; }
+        if (typeof b.featured === 'boolean') { r.featured = b.featured; if (r.featured) r.claimed = true; }
+        if (typeof b.hidden === 'boolean') { r.hidden = b.hidden; }
       });
       L.json(res, 200, { ok: true });
       return;
