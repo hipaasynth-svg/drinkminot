@@ -220,7 +220,6 @@
 <div class="app">
   <div class="top">
     <div class="brand">Drink<span>Minot</span></div>
-    <button class="ownerlink" id="ownerLink">Owner login</button>
   </div>
   <div class="tagline">Tap · Rate · Earn — Zero tracking. Period.</div>
   <div class="section" id="sectionHead"></div>
@@ -737,7 +736,11 @@
         else { toast('Wallet not ready — try again'); }
       });
     };
-    var a=$('#awBtn'); if(a) a.onclick=function(){ toast('Apple Wallet coming soon'); };
+    var a=$('#awBtn'); if(a) a.onclick=function(){
+      var u=S.walletAppleUrl(r.id);
+      if(u){ toast('Opening Apple Wallet…'); window.location.href=u; }
+      else { toast('Wallet not ready — try again'); }
+    };
   }
   function renderTagFoot(){
     var r = S.get(tagId); if(!r) return;
@@ -896,7 +899,6 @@
     });
     window.addEventListener('resize',function(){ layout(true); if($('#tag').classList.contains('show')) fitTagCard(); });
     window.addEventListener('orientationchange',function(){ setTimeout(function(){layout(true); if($('#tag').classList.contains('show')) fitTagCard();},250); });
-    $('#ownerLink').onclick=openLogin;
     $('#loginBtn').onclick=doLogin;
     $('#loginPw').addEventListener('keydown',function(e){ if(e.key==='Enter') doLogin(); });
     $('#claimBtn').onclick=doClaim;

@@ -80,10 +80,14 @@ Open `index.html` for the customer experience; `admin.html` for the operator con
   resets and issues a short redemption code (`DRK-…`) with an expiry.
 - **Wallet passes + card backup** — progress lives per-device, but in shared mode it is also
   mirrored to the backend under the device's random token (no name/email/account), so a
-  reload or wiped cache can restore it. Customers can **Add card to Google Wallet**; the pass
-  carries the punch balance and a QR that reopens the card (`?dev=<token>`), and its balance
-  **auto-updates** after each punch. Google is env-gated (see below); Apple is wired through
-  and lights up once its certs are set. With no wallet env, the buttons simply don't render.
+  reload or wiped cache can restore it. Customers can **Add card to Google Wallet** or **Add
+  to Apple Wallet**; each pass carries the punch balance and a QR that reopens the card
+  (`?dev=<token>`), so a new phone re-links to the same card. The **Google** card also
+  **auto-updates** after each punch (server-side patch). The **Apple** `.pkpass` is generated
+  and signed on the fly (`/api/pass?provider=apple`, served as `application/vnd.apple.pkpass`);
+  its balance is baked in at add-time, so re-adding refreshes it (live push-update via APNs is
+  a later step). Both are env-gated (see below); with no wallet env the buttons don't render.
+  Apple signing shells out to the system `openssl` (present on Vercel's Node runtime).
 - **Threshold ratings** — a star average is hidden until a venue has 3+ real (tap/QR-verified)
   reviews; below that it shows "✨ New — be the first to rate" instead of a number, so a
   single early rating can't masquerade as a settled score.
@@ -156,6 +160,7 @@ Photos are stored under separate Redis keys and downscaled client-side to keep t
 - `POST /api/device` `{action:'get'|'put', deviceId, perRest}` → anonymous punch-card backup
   (keyed only by the random `dev_…` token; sanitized to punch/coupon fields; no identity)
 - `GET  /api/pass` → `{google, apple}` (which wallet buttons the server can issue)
+- `GET  /api/pass?provider=apple&dev=&venueId=&done=&total=` → the signed `.pkpass` file
 - `POST /api/pass` `{provider, dev, venueId, done, total, action?}` → an Add-to-Wallet save
   link; `action:'patch'` just refreshes the balance on a card the customer already added
 - `GET  /api/events` → curated upcoming Minot events (public JSON, upcoming only)
