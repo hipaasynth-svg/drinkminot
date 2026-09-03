@@ -16,6 +16,9 @@
   var RATE_WINDOW_MS = 86400000;
   var TAP_WINDOW_MS = 7200000;          // how long a real tag tap keeps the Rate button reachable (2h)
   var DEFAULT_ADMIN = 'drink-admin';
+  var MIN_RATINGS = 3;                   // real (tap/QR-verified) reviews needed before a star average shows
+  // Owners choose how many punches earn the reward, within these bounds.
+  var MIN_PUNCHES = 2, MAX_PUNCHES = 5, DEFAULT_PUNCHES = 3;
 
   // RAW order is FROZEN: each venue's id is its 1-based position here (see seedList),
   // and those ids are printed on the in-store NFC/QR tags (?r=<id>) and used as the key
@@ -109,7 +112,7 @@
   // localStorage was seeded with the full list before the removal.
   var REMOVED = { 20: true, 21: true, 22: true, 31: true, 34: true, 35: true, 36: true, 37: true };
   function decorateList(list) {
-    return list.filter(function (r) { return !REMOVED[r.id]; }).map(function (r) {
+    return list.filter(function (r) { return !REMOVED[r.id] && !r.hidden; }).map(function (r) {
       withRating(r);
       r.category = categoryOf(r.id);
       r.over21 = over21Of(r.id);
@@ -121,6 +124,10 @@
       return sortKey(a.name).localeCompare(sortKey(b.name), undefined, { numeric: true, sensitivity: 'base' });
     });
   }
+  // Punches-needed is owner-settable but always kept within [MIN,MAX]; anything missing or
+  // out of range (including older data) falls back to the default.
+  function clampPunches(n) { n = parseInt(n, 10); return (n >= MIN_PUNCHES && n <= MAX_PUNCHES) ? n : DEFAULT_PUNCHES; }
+  function punchesFor(r) { return clampPunches(r && r.punchesNeeded); }
 
   function slug(n) { return String(n).toLowerCase().replace(/[^a-z0-9]/g, ''); }
   function defaultPassword(n) { return slug(n) + '26'; }
@@ -135,14 +142,15 @@
       return {
         id: id, name: name, address: row[1], hours: row[2],
         category: row[3], over21: !!row[4], alsoOnEat: !!row[5],
-        claimed: claimed, paid: claimed, password: defaultPassword(name),
+        claimed: claimed, paid: claimed, featured: claimed, hidden: false, password: defaultPassword(name),
         photo: null, hasPhoto: false,
         pickPhotos: [null, null, null], hasPickPhoto: [false, false, false],
         upvotes: 0, ratingSum: 0, ratingCount: 0, totalRatings: 0, rating: 0,
         picks: claimed ? ['Cold beer cave', 'ND craft & local cans', 'Weekend wine tasting'] : ['', '', ''],
         note: claimed ? 'Locally owned — thanks for drinking local, Minot!' : '',
         website: claimed ? 'broadwayliquor.com' : '',
-        reward: 'Free item on your 3rd punch', couponValidDays: 14,
+        reward: 'Free item on your 3rd punch', couponValidDays: 14, punchesNeeded: DEFAULT_PUNCHES,
+        offer: claimed ? 'Locals-only deal — show your DrinkMinot screen before you order' : '',
         happyHour: claimed
           ? { enabled: true, days: [0, 1, 2, 3, 4, 5, 6], start: '15:00', end: '18:00', special: '$1 off six-packs' }
           : { enabled: false, days: [1, 2, 3, 4, 5], start: '15:00', end: '18:00', special: '' }
@@ -163,21 +171,27 @@
   function to12h(t) { var m = toMin(t); if (m == null) return t || ''; var h = Math.floor(m / 60), mm = m % 60, ap = h >= 12 ? 'pm' : 'am', h12 = h % 12 || 12; return h12 + (mm ? ':' + (mm < 10 ? '0' + mm : mm) : '') + ap; }
 
   function withRating(r) { r.rating = r.ratingCount ? Math.round((r.ratingSum / r.ratingCount) * 10) / 10 : 0; return r; }
+  // A star average is only shown once a venue has enough real reviews; below the threshold
+  // the UI shows "New to DrinkMinot" instead of a number. Uses the verified rating count.
+  function isRated(r) { return !!(r && ((r.totalRatings || r.ratingCount || 0) >= MIN_RATINGS)); }
 
   /* ---------- device (per-browser, anonymous) ---------- */
   function loadDevice() {
     var d; try { d = JSON.parse(global.localStorage.getItem(DKEY)); } catch (e) { d = null; }
-    if (!d || !d.deviceId) d = { deviceId: 'dev_' + Math.random().toString(36).slice(2) + Date.now().toString(36), perRest: {} };
+    // Persist a freshly-minted token immediately, so the device token is stable from the
+    // very first read. The wallet pass QR encodes this token to re-link a wiped phone, so
+    // it must not change between the pass being created and the next punch being saved.
+    if (!d || !d.deviceId) { d = { deviceId: 'dev_' + Math.random().toString(36).slice(2) + Date.now().toString(36), perRest: {} }; saveDevice(d); }
     if (!d.perRest) d.perRest = {};
     return d;
   }
   function saveDevice(d) { try { global.localStorage.setItem(DKEY, JSON.stringify(d)); } catch (e) {} }
-  function deviceRec(id) { var d = loadDevice(); return d.perRest[id] || { done: 0, total: 3, coupon: null, ratedAt: 0 }; }
+  function deviceRec(id) { var d = loadDevice(); return d.perRest[id] || { done: 0, total: DEFAULT_PUNCHES, coupon: null, ratedAt: 0 }; }
   function ratedRecently(id) { var rec = deviceRec(id); return !!(rec.ratedAt && Date.now() - rec.ratedAt < RATE_WINDOW_MS); }
   // Called only when a real tag tap lands (enterTagMode) — never from the Paid preview
   // path — so the resumable "Rate now" pill stays gated on an actual physical visit.
   function recordTap(id) {
-    var d = loadDevice(); var rec = d.perRest[id] || { done: 0, total: 3, coupon: null, ratedAt: 0 };
+    var d = loadDevice(); var rec = d.perRest[id] || { done: 0, total: DEFAULT_PUNCHES, coupon: null, ratedAt: 0 };
     rec.tapAt = Date.now(); d.perRest[id] = rec; saveDevice(d); deviceBackup();
   }
   // Most recent still-live tap (within TAP_WINDOW_MS) that hasn't already been rated.
@@ -191,17 +205,20 @@
     }
     return best;
   }
-  // Apply a completed rating to this device's punch card; returns the record.
-  function punch(id, couponValidDays, reward) {
-    var d = loadDevice(); var rec = d.perRest[id] || { done: 0, total: 3, coupon: null, ratedAt: 0 };
+  // Apply a completed rating to this device's punch card; returns the record. `total` is the
+  // venue's current punches-needed setting — the card fills to that, not a fixed 3.
+  function punch(id, couponValidDays, reward, total) {
+    total = clampPunches(total);
+    var d = loadDevice(); var rec = d.perRest[id] || { done: 0, total: total, coupon: null, ratedAt: 0 };
     rec.ratedAt = Date.now();
+    rec.total = total;
     var nd = rec.done + 1;
-    if (nd >= (rec.total || 3)) {
+    if (nd >= total) {
       rec.done = 0;
       var days = couponValidDays || 14;
       rec.coupon = { code: 'DRK-' + Math.random().toString(36).slice(2, 7).toUpperCase(), issuedAt: Date.now(), expiresAt: Date.now() + days * 86400000, reward: reward || 'Reward earned!' };
     } else { rec.done = nd; }
-    d.perRest[id] = rec; saveDevice(d); deviceBackup(); return rec;
+    d.perRest[id] = rec; saveDevice(d); deviceBackup(); walletSync(id); return rec;
   }
 
   /* ---------- anonymous server backup of punches (keyed by the random deviceId) ----------
@@ -217,7 +234,7 @@
   function mergeRec(a, b) {
     if (!a) return b; if (!b) return a;
     var newer = (b.ratedAt || 0) >= (a.ratedAt || 0) ? b : a, older = newer === b ? a : b;
-    var m = { done: newer.done || 0, total: newer.total || older.total || 3, ratedAt: newer.ratedAt || 0, tapAt: Math.max(a.tapAt || 0, b.tapAt || 0) };
+    var m = { done: newer.done || 0, total: newer.total || older.total || DEFAULT_PUNCHES, ratedAt: newer.ratedAt || 0, tapAt: Math.max(a.tapAt || 0, b.tapAt || 0) };
     var coup = newer.coupon || null;
     if ((!coup || (coup.expiresAt || 0) < Date.now()) && older.coupon && (older.coupon.expiresAt || 0) > Date.now()) coup = older.coupon;
     m.coupon = coup;
@@ -356,7 +373,7 @@
       return api('rate', 'POST', { id: id, stars: stars, upvote: upvote }).then(function (res) {
         if (!res.ok) return { ok: false, reason: (res.data && res.data.error) || 'error' };
         var c = get(id); if (c) { c.upvotes = res.data.upvotes; c.totalRatings = res.data.totalRatings; c.rating = res.data.rating; }
-        var rec = punch(id, r ? r.couponValidDays : 14, r ? r.reward : '');
+        var rec = punch(id, r ? r.couponValidDays : 14, r ? r.reward : '', punchesFor(r));
         return { ok: true, record: rec };
       });
     }
@@ -365,7 +382,7 @@
     if (!lr) return Promise.resolve({ ok: false, reason: 'not_found' });
     lr.totalRatings += 1; lr.ratingSum += stars; lr.ratingCount += 1; if (upvote) lr.upvotes += 1;
     saveLocal(d); cache = decorateList(d.restaurants);
-    var rec2 = punch(id, lr.couponValidDays, lr.reward);
+    var rec2 = punch(id, lr.couponValidDays, lr.reward, punchesFor(lr));
     return Promise.resolve({ ok: true, record: rec2 });
   }
 
@@ -395,6 +412,8 @@
     if (typeof fields.note === 'string') lr.note = fields.note;
     if (typeof fields.website === 'string') lr.website = fields.website;
     if (typeof fields.reward === 'string') lr.reward = fields.reward;
+    if (typeof fields.offer === 'string') lr.offer = fields.offer.slice(0, 90);
+    if (fields.punchesNeeded != null) lr.punchesNeeded = clampPunches(fields.punchesNeeded);
     if (fields.couponValidDays != null) lr.couponValidDays = Math.max(1, parseInt(fields.couponValidDays, 10) || 1);
     if (fields.happyHour) lr.happyHour = fields.happyHour;
     if (typeof fields.password === 'string' && fields.password.trim()) lr.password = fields.password.trim();
@@ -476,11 +495,13 @@
     return Promise.resolve({ ok: true });
   }
   function adminSetFlag(pw, id, flags) {
-    if (mode === 'server') return api('admin', 'POST', { password: pw, action: 'setFlag', id: id, claimed: flags.claimed, paid: flags.paid }).then(function (res) { return refresh().then(function () { return { ok: res.ok }; }); });
+    if (mode === 'server') return api('admin', 'POST', { password: pw, action: 'setFlag', id: id, claimed: flags.claimed, paid: flags.paid, featured: flags.featured, hidden: flags.hidden }).then(function (res) { return refresh().then(function () { return { ok: res.ok }; }); });
     if (!checkAdminLocal(pw)) return Promise.resolve({ ok: false });
     var d = loadLocal(), lr = localFind(d, id); if (!lr) return Promise.resolve({ ok: false });
-    if (typeof flags.claimed === 'boolean') { lr.claimed = flags.claimed; if (!lr.claimed) lr.paid = false; }
+    if (typeof flags.claimed === 'boolean') { lr.claimed = flags.claimed; if (!lr.claimed) { lr.paid = false; lr.featured = false; } }
     if (typeof flags.paid === 'boolean') { lr.paid = flags.paid; if (lr.paid) lr.claimed = true; }
+    if (typeof flags.featured === 'boolean') { lr.featured = flags.featured; if (lr.featured) lr.claimed = true; }
+    if (typeof flags.hidden === 'boolean') { lr.hidden = flags.hidden; }
     saveLocal(d); cache = decorateList(d.restaurants); return Promise.resolve({ ok: true });
   }
   function adminResetPassword(pw, id) {
@@ -497,29 +518,43 @@
   }
   function setAdminPasswordLocal(pw) { try { global.localStorage.setItem(AKEY, pw); return true; } catch (e) { return false; } }
 
-  /* ---------- wallet passes ---------- */
-  // Which "Add to Wallet" buttons the server can issue right now (env-gated).
+  /* ---------- wallet passes (env-gated on the server) ---------- */
+  var walletGoogleOn = false;   // cached from walletCaps(); gates the auto-update-on-punch call
+  // Which "Add to Wallet" buttons the server can issue right now.
   function walletCaps() {
     return api('pass', 'GET').then(function (res) {
-      return (res.ok && res.data) ? { google: !!res.data.google, apple: !!res.data.apple } : { google: false, apple: false };
+      var caps = (res.ok && res.data) ? { google: !!res.data.google, apple: !!res.data.apple } : { google: false, apple: false };
+      walletGoogleOn = caps.google;
+      return caps;
     }).catch(function () { return { google: false, apple: false }; });
   }
   // Create/refresh this device's card for a venue and get its Add-to-Wallet link.
   function walletSave(provider, venueId) {
-    var d = loadDevice(), rec = d.perRest[venueId] || { done: 0, total: 3 };
-    return api('pass', 'POST', { provider: provider, dev: d.deviceId, venueId: venueId, done: rec.done || 0, total: rec.total || 3 })
+    var d = loadDevice(), rec = d.perRest[venueId] || {}, total = rec.total || punchesFor(get(venueId));
+    return api('pass', 'POST', { provider: provider, dev: d.deviceId, venueId: venueId, done: rec.done || 0, total: total })
       .then(function (res) { return (res.ok && res.data) ? res.data : { error: (res.data && res.data.error) || 'error' }; })
       .catch(function () { return { error: 'network' }; });
+  }
+  // Auto-update: after a punch, refresh the balance on the customer's Google Wallet card if
+  // they've added one. Fire-and-forget; the server no-ops when no pass exists, so this is
+  // cheap and never creates a card. Only runs when Google Wallet is actually configured.
+  function walletSync(venueId) {
+    if (mode !== 'server' || !walletGoogleOn) return;
+    var d = loadDevice(), rec = d.perRest[venueId];
+    if (!rec) return;
+    api('pass', 'POST', { provider: 'google', action: 'patch', dev: d.deviceId, venueId: venueId, done: rec.done || 0, total: rec.total || punchesFor(get(venueId)) }).catch(function () {});
   }
 
   global.DrinkStore = {
     RATE_WINDOW_MS: RATE_WINDOW_MS,
+    MIN_RATINGS: MIN_RATINGS, isRated: isRated, MIN_PUNCHES: MIN_PUNCHES, MAX_PUNCHES: MAX_PUNCHES, DEFAULT_PUNCHES: DEFAULT_PUNCHES,
+    clampPunches: clampPunches, punchesFor: punchesFor,
     init: init, refresh: refresh, mode: function () { return mode; }, isServer: function () { return mode === 'server'; },
     list: list, get: get, getPhoto: getPhoto, clearPhoto: clearPhoto,
     getPickPhoto: getPickPhoto, clearPickPhoto: clearPickPhoto,
     rate: rate, ratedRecently: ratedRecently, deviceRec: deviceRec, recordTap: recordTap, pendingTap: pendingTap,
     deviceId: function () { return loadDevice().deviceId; }, deviceBackup: deviceBackup, deviceRestore: deviceRestore, adoptDevice: adoptDevice,
-    walletCaps: walletCaps, walletSave: walletSave,
+    walletCaps: walletCaps, walletSave: walletSave, walletSync: walletSync,
     ownerLogin: ownerLogin, ownerClaim: ownerClaim, ownerUpdate: ownerUpdate, ownerPhoto: ownerPhoto, ownerPickPhoto: ownerPickPhoto,
     checkout: checkout, confirmUpgrade: confirmUpgrade,
     adminList: adminList, adminPhoto: adminPhoto, adminRemovePhoto: adminRemovePhoto,

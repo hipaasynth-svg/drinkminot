@@ -27,6 +27,14 @@ module.exports = async function (req, res) {
 
     if (b.provider === 'google') {
       if (!W.googleConfigured()) { L.json(res, 501, { error: 'not_configured' }); return; }
+      // action:'patch' just refreshes the balance on a card the customer already added
+      // (used after each punch) — it never creates a pass. Everything else returns the
+      // Add-to-Wallet save link.
+      if (b.action === 'patch') {
+        await W.googlePatch(dev, venueId, profile.name, done, total);
+        L.json(res, 200, { ok: true });
+        return;
+      }
       var r = await W.googleSave(dev, venueId, profile.name, done, total);
       if (!r.ok) { L.json(res, 502, { error: r.reason || 'wallet_failed' }); return; }
       L.json(res, 200, { ok: true, saveUrl: r.saveUrl });

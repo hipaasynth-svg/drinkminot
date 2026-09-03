@@ -55,7 +55,8 @@ family restaurants that merely serve alcohol are not.
 | File | Purpose |
 |------|---------|
 | `index.html` | Public app + owner login + owner dashboard |
-| `admin.html` | Operator admin (upload photos, toggle Claimed/Paid, see owner passwords) |
+| `guide.html` | "Minot's Most Wanted" — a curated, hand-picked landing page (optional `?hotel=` co-brand) |
+| `admin.html` | Operator admin (upload photos, toggle Claimed/Paid/Featured, hide/show, see owner passwords) |
 | `store.js`   | Shared data model, seed list, persistence, helpers |
 
 Open `index.html` for the customer experience; `admin.html` for the operator console.
@@ -75,19 +76,35 @@ Open `index.html` for the customer experience; `admin.html` for the operator con
 - **Two-tap rating** — thumbs-up then a star. Because there is **no thumbs-down**, a
   "Submit stars only — no upvote" option lets people rate quality after a bad experience
   without upvoting. Brief "PUNCHED" starburst on submit; one rating per device per venue / 24h.
-- **Punch card** — 10 punches = a venue-set reward, then it resets and issues a short
-  redemption code (`DRK-…`) with an expiry.
+- **Punch card** — an owner-set number of punches (2–5) earns a venue-set reward, then it
+  resets and issues a short redemption code (`DRK-…`) with an expiry.
+- **Wallet passes + card backup** — progress lives per-device, but in shared mode it is also
+  mirrored to the backend under the device's random token (no name/email/account), so a
+  reload or wiped cache can restore it. Customers can **Add card to Google Wallet**; the pass
+  carries the punch balance and a QR that reopens the card (`?dev=<token>`), and its balance
+  **auto-updates** after each punch. Google is env-gated (see below); Apple is wired through
+  and lights up once its certs are set. With no wallet env, the buttons simply don't render.
+- **Threshold ratings** — a star average is hidden until a venue has 3+ real (tap/QR-verified)
+  reviews; below that it shows "✨ New — be the first to rate" instead of a number, so a
+  single early rating can't masquerade as a settled score.
+- **Minot's Most Wanted** (`guide.html`) — a curated landing page with up to **3 Spotlight
+  spots**, each carrying an exclusive DrinkMinot offer and "show your phone before you order"
+  redemption instructions, backfilled with top-rated favorites. Spotlight = the admin
+  **Featured** toggle; the owner fills the offer in from their dashboard. Optional per-hotel
+  co-brand via `?hotel=`.
 - **Neon "Happy Hour Now"** indicator that switches on/off by the clock from the owner's
   schedule (day + start/end + special).
 - **Owner dashboard** (password-gated) — House Picks billboard (top 3 picks), happy-hour
-  selector, punch-card reward, note, website, password change. A "forgot password" line
-  points owners to `cody@drinkminot.com`.
+  selector, punch-card reward + punches-needed (2–5), the exclusive Most Wanted offer, note,
+  website, password change. A "forgot password" line points owners to `cody@drinkminot.com`.
 - **Paid gate** — changing the photo and publishing the billboard require the $59/mo tier;
   free claimed owners can edit the rest.
-- **Admin console** — upload a photo for any venue, toggle Claimed/Paid, view/hand out owner
-  passwords (or reset one to default), copy each venue's tag URL, reset demo data. The 21+
-  and cross-listing flags are shown per venue. No admin action writes to a vote counter —
-  those only move via a real rating.
+- **Admin console** — upload a photo for any venue, toggle Claimed/Paid, add to **Minot's
+  Most Wanted** (Featured), **hide/show a venue** (pulls it from the public list, tag page,
+  Most Wanted and rating while keeping it in the admin panel to restore), view/hand out owner
+  passwords (or reset one to default), copy each venue's tag URL, reset demo data. The 21+ and
+  cross-listing flags are shown per venue. No admin action writes to a vote counter — those
+  only move via a real rating.
 
 ### Default credentials
 - **Owner login:** pick your venue, password = its name (letters only) + `26`
@@ -136,6 +153,11 @@ Photos are stored under separate Redis keys and downscaled client-side to keep t
 - `POST /api/owner` `{action:'login'|'update'|'photo', id, password, …}` → owner controls
 - `POST /api/admin` `{password, action, …}` → photos, Claimed/Paid flags, list, reset
 - `GET  /api/photo?id=` → a venue's photo
+- `POST /api/device` `{action:'get'|'put', deviceId, perRest}` → anonymous punch-card backup
+  (keyed only by the random `dev_…` token; sanitized to punch/coupon fields; no identity)
+- `GET  /api/pass` → `{google, apple}` (which wallet buttons the server can issue)
+- `POST /api/pass` `{provider, dev, venueId, done, total, action?}` → an Add-to-Wallet save
+  link; `action:'patch'` just refreshes the balance on a card the customer already added
 - `GET  /api/events` → curated upcoming Minot events (public JSON, upcoming only)
 - `POST /api/events` `{password, action:'add'|'update'|'remove'|'list', event}` → admin-gated event editing
 
@@ -224,6 +246,9 @@ Implemented with Stripe's REST API directly (no SDK): `api/checkout.js`,
 | `STRIPE_SECRET_KEY` | Live $59/mo Stripe checkout |
 | `STRIPE_WEBHOOK_SECRET` | Auto status sync (cancellations) |
 | `STRIPE_PRICE_ID` | Use a fixed Stripe Price instead of the inline $59/mo |
+| `GOOGLE_WALLET_ISSUER_ID` | Google Wallet punch-card passes (with the SA key below) |
+| `GOOGLE_WALLET_SA_JSON_BASE64` | Google service-account JSON key, base64-encoded |
+| `APPLE_PASS_TYPE_ID` / `APPLE_TEAM_ID` / `APPLE_PASS_CERT_P12_BASE64` / `APPLE_PASS_CERT_PASSWORD` / `APPLE_WWDR_CERT_BASE64` | Apple Wallet passes (all five required; button hidden until then) |
 
 ### Notes & remaining for later
 - Addresses/hours are placeholders (`Minot, ND` / `Verify hours`) for venues where they
