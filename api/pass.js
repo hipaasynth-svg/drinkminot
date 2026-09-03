@@ -3,14 +3,18 @@ var L = require('./_lib');
 var W = require('./_wallet');
 
 // GET  /api/pass            -> { google:bool, apple:bool }  (which wallet buttons to show)
+// GET  /api/pass?provider=apple&dev=&venueId=&done=&total=  -> the signed .pkpass file
+//   (Safari/iOS opens it straight into Apple Wallet; the balance is baked in at add time)
 // POST /api/pass { provider:'google', dev, venueId, done, total } -> { ok, saveUrl }
-//   provider:'apple' returns not_configured until the Apple certs are set — the client
-//   simply hides that button, nothing breaks.
+//   action:'patch' refreshes the balance on a Google card the customer already added.
 var DEV = /^dev_[a-z0-9]{6,80}$/i;
 
 module.exports = async function (req, res) {
   try {
     if (req.method === 'GET') {
+      var q = {};
+      try { new URL(req.url, 'http://x').searchParams.forEach(function (v, k) { q[k] = v; }); } catch (e) {}
+      if (q.provider === 'apple') { await serveApple(q, res); return; }
       L.json(res, 200, { google: W.googleConfigured(), apple: W.appleConfigured() });
       return;
     }
@@ -40,13 +44,28 @@ module.exports = async function (req, res) {
       L.json(res, 200, { ok: true, saveUrl: r.saveUrl });
       return;
     }
-    if (b.provider === 'apple') {
-      // Apple pass signing is added once the certificate env vars are in place.
-      L.json(res, 501, { error: 'not_configured' });
-      return;
-    }
     L.json(res, 400, { error: 'provider' });
   } catch (e) {
     L.json(res, 500, { error: 'pass_failed' });
   }
 };
+
+// Stream a signed .pkpass for the Apple Wallet button. Reads the same dev/venue/balance
+// params off the query string; 501 when Apple isn't configured so the button no-ops.
+async function serveApple(q, res) {
+  if (!W.appleConfigured()) { L.json(res, 501, { error: 'not_configured' }); return; }
+  var dev = String(q.dev || '');
+  if (!DEV.test(dev)) { L.json(res, 400, { error: 'bad_device' }); return; }
+  var venueId = parseInt(q.venueId, 10);
+  var profile = venueId ? await L.getProfile(venueId) : null;
+  if (!profile) { L.json(res, 404, { error: 'not_found' }); return; }
+  var done = Math.max(0, Math.min(1000, parseInt(q.done, 10) || 0));
+  var total = Math.max(1, Math.min(1000, parseInt(q.total, 10) || 3));
+  var buf = W.applePkpass(dev, venueId, profile.name, done, total);
+  if (!buf) { L.json(res, 502, { error: 'wallet_failed' }); return; }
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'application/vnd.apple.pkpass');
+  res.setHeader('Content-Disposition', 'attachment; filename="drinkminot.pkpass"');
+  res.setHeader('Cache-Control', 'no-store');
+  res.end(buf);
+}

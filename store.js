@@ -528,12 +528,20 @@
       return caps;
     }).catch(function () { return { google: false, apple: false }; });
   }
-  // Create/refresh this device's card for a venue and get its Add-to-Wallet link.
+  // Create/refresh this device's card for a venue and get its Add-to-Wallet link (Google).
   function walletSave(provider, venueId) {
     var d = loadDevice(), rec = d.perRest[venueId] || {}, total = rec.total || punchesFor(get(venueId));
     return api('pass', 'POST', { provider: provider, dev: d.deviceId, venueId: venueId, done: rec.done || 0, total: total })
       .then(function (res) { return (res.ok && res.data) ? res.data : { error: (res.data && res.data.error) || 'error' }; })
       .catch(function () { return { error: 'network' }; });
+  }
+  // Apple's .pkpass is a binary download, not a save URL — the button navigates straight to
+  // this GET endpoint, which streams the signed pass. Returns '' when not in server mode.
+  function walletAppleUrl(venueId) {
+    if (mode !== 'server') return '';
+    var d = loadDevice(), rec = d.perRest[venueId] || {}, total = rec.total || punchesFor(get(venueId));
+    return '/api/pass?provider=apple&dev=' + encodeURIComponent(d.deviceId) + '&venueId=' + venueId +
+      '&done=' + (rec.done || 0) + '&total=' + total;
   }
   // Auto-update: after a punch, refresh the balance on the customer's Google Wallet card if
   // they've added one. Fire-and-forget; the server no-ops when no pass exists, so this is
@@ -554,7 +562,7 @@
     getPickPhoto: getPickPhoto, clearPickPhoto: clearPickPhoto,
     rate: rate, ratedRecently: ratedRecently, deviceRec: deviceRec, recordTap: recordTap, pendingTap: pendingTap,
     deviceId: function () { return loadDevice().deviceId; }, deviceBackup: deviceBackup, deviceRestore: deviceRestore, adoptDevice: adoptDevice,
-    walletCaps: walletCaps, walletSave: walletSave, walletSync: walletSync,
+    walletCaps: walletCaps, walletSave: walletSave, walletAppleUrl: walletAppleUrl, walletSync: walletSync,
     ownerLogin: ownerLogin, ownerClaim: ownerClaim, ownerUpdate: ownerUpdate, ownerPhoto: ownerPhoto, ownerPickPhoto: ownerPickPhoto,
     checkout: checkout, confirmUpgrade: confirmUpgrade,
     adminList: adminList, adminPhoto: adminPhoto, adminRemovePhoto: adminRemovePhoto,

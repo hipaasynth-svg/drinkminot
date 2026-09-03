@@ -146,16 +146,136 @@ async function googlePatch(token, venueId, venueName, done, total) {
   } catch (e) { /* non-fatal */ }
 }
 
-// Apple is added later; report configured only when all its vars are present.
+/* ============================ Apple Wallet (.pkpass) ============================
+   A real, signed store-card pass — env-gated exactly like Google. Required vars:
+     APPLE_PASS_TYPE_ID          e.g. pass.com.drinkminot.loyalty
+     APPLE_TEAM_ID               your 10-char Apple team id
+     APPLE_PASS_CERT_P12_BASE64  the Pass Type ID cert + key as a base64 .p12
+     APPLE_PASS_CERT_PASSWORD    the .p12 export password ('' if none)
+     APPLE_WWDR_CERT_BASE64      Apple's WWDR intermediate cert (.cer DER or PEM), base64
+   The pass carries the punch balance + a QR back to ?r=<venue>&dev=<token>, so it
+   re-links a wiped phone to its anonymous backup — same as the Google card. */
+var os = require('os'), fs = require('fs'), path = require('path');
+var execFileSync = require('child_process').execFileSync;
+var APPLE_ASSETS = require('./_apple_assets');
+var APPLE_ORG = 'DrinkMinot', APPLE_DESC = 'DrinkMinot punch card', DEFAULT_TOTAL = 3;
+var PASS_BG = 'rgb(21,18,38)', PASS_FG = 'rgb(243,239,250)', PASS_LABEL = 'rgb(198,161,91)';
+
 function appleConfigured() {
   return !!(process.env.APPLE_PASS_TYPE_ID && process.env.APPLE_TEAM_ID &&
-    process.env.APPLE_PASS_CERT_P12_BASE64 && process.env.APPLE_PASS_CERT_PASSWORD && process.env.APPLE_WWDR_CERT_BASE64);
+    process.env.APPLE_PASS_CERT_P12_BASE64 && process.env.APPLE_PASS_CERT_PASSWORD != null && process.env.APPLE_WWDR_CERT_BASE64);
+}
+
+// --- minimal ZIP writer (store method, no compression) — a .pkpass is just a zip ---
+var CRC_TABLE = (function () {
+  var t = new Array(256);
+  for (var n = 0; n < 256; n++) { var c = n; for (var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c >>> 0; }
+  return t;
+})();
+function crc32(buf) {
+  var c = 0xFFFFFFFF;
+  for (var i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function zipStore(files) {
+  var local = [], central = [], offset = 0;
+  files.forEach(function (f) {
+    var name = Buffer.from(f.name, 'utf8'), data = f.data, crc = crc32(data);
+    var lh = Buffer.alloc(30);
+    lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(0, 6); lh.writeUInt16LE(0, 8);
+    lh.writeUInt16LE(0, 10); lh.writeUInt16LE(0, 12);
+    lh.writeUInt32LE(crc, 14); lh.writeUInt32LE(data.length, 18); lh.writeUInt32LE(data.length, 22);
+    lh.writeUInt16LE(name.length, 26); lh.writeUInt16LE(0, 28);
+    local.push(lh, name, data);
+    var ch = Buffer.alloc(46);
+    ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt16LE(0, 8);
+    ch.writeUInt16LE(0, 10); ch.writeUInt16LE(0, 12); ch.writeUInt16LE(0, 14);
+    ch.writeUInt32LE(crc, 16); ch.writeUInt32LE(data.length, 20); ch.writeUInt32LE(data.length, 24);
+    ch.writeUInt16LE(name.length, 28); ch.writeUInt16LE(0, 30); ch.writeUInt16LE(0, 32);
+    ch.writeUInt16LE(0, 34); ch.writeUInt16LE(0, 36); ch.writeUInt32LE(0, 38);
+    ch.writeUInt32LE(offset, 42);
+    central.push(ch, name);
+    offset += lh.length + name.length + data.length;
+  });
+  var cd = Buffer.concat(central), body = Buffer.concat(local);
+  var end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(files.length, 8); end.writeUInt16LE(files.length, 10);
+  end.writeUInt32LE(cd.length, 12); end.writeUInt32LE(body.length, 16);
+  return Buffer.concat([body, cd, end]);
+}
+
+// Some Apple .p12 exports use legacy (RC2/3DES) ciphers OpenSSL 3 won't read by default;
+// retry once with the legacy provider before giving up.
+function openssl(args) {
+  // First attempt quiet: a legacy-cipher .p12 fails here and is expected to; only the
+  // retry's stderr is surfaced so a genuine failure still shows up in the logs.
+  try { execFileSync('openssl', args, { stdio: ['ignore', 'ignore', 'ignore'] }); }
+  catch (e) { execFileSync('openssl', args.concat(['-legacy']), { stdio: ['ignore', 'ignore', 'inherit'] }); }
+}
+function wwdrPemFrom(b64) {
+  var raw = Buffer.from(b64, 'base64');
+  if (raw.toString('utf8').indexOf('BEGIN CERT') >= 0) return raw.toString('utf8');
+  var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wwdr-'));
+  try {
+    var der = path.join(dir, 'in.cer'), pem = path.join(dir, 'out.pem');
+    fs.writeFileSync(der, raw);
+    execFileSync('openssl', ['x509', '-inform', 'DER', '-in', der, '-out', pem], { stdio: ['ignore', 'ignore', 'inherit'] });
+    return fs.readFileSync(pem, 'utf8');
+  } finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {} }
+}
+// Detached PKCS#7 signature (DER) of the manifest, signed by the pass cert (WWDR in chain).
+function appleSign(manifest) {
+  var dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pk-'));
+  try {
+    var p12 = path.join(dir, 'c.p12'); fs.writeFileSync(p12, Buffer.from(process.env.APPLE_PASS_CERT_P12_BASE64, 'base64'));
+    var pw = 'pass:' + (process.env.APPLE_PASS_CERT_PASSWORD || '');
+    var certPem = path.join(dir, 'cert.pem'), keyPem = path.join(dir, 'key.pem'), wwdr = path.join(dir, 'wwdr.pem');
+    openssl(['pkcs12', '-in', p12, '-clcerts', '-nokeys', '-out', certPem, '-passin', pw]);
+    openssl(['pkcs12', '-in', p12, '-nocerts', '-nodes', '-out', keyPem, '-passin', pw]);
+    fs.writeFileSync(wwdr, wwdrPemFrom(process.env.APPLE_WWDR_CERT_BASE64));
+    var man = path.join(dir, 'manifest.json'), sig = path.join(dir, 'sig');
+    fs.writeFileSync(man, manifest);
+    execFileSync('openssl', ['smime', '-sign', '-binary', '-noattr', '-outform', 'DER',
+      '-in', man, '-out', sig, '-signer', certPem, '-inkey', keyPem, '-certfile', wwdr],
+      { stdio: ['ignore', 'ignore', 'inherit'] });
+    return fs.readFileSync(sig);
+  } finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {} }
+}
+function applePassJson(token, venueId, venueName, done, total) {
+  return Buffer.from(JSON.stringify({
+    formatVersion: 1,
+    passTypeIdentifier: process.env.APPLE_PASS_TYPE_ID,
+    teamIdentifier: process.env.APPLE_TEAM_ID,
+    organizationName: APPLE_ORG, description: APPLE_DESC,
+    serialNumber: token + '.' + venueId, logoText: APPLE_ORG,
+    backgroundColor: PASS_BG, foregroundColor: PASS_FG, labelColor: PASS_LABEL,
+    barcodes: [{ format: 'PKBarcodeFormatQR', message: SITE + '/?r=' + venueId + '&dev=' + token, messageEncoding: 'iso-8859-1' }],
+    storeCard: {
+      primaryFields: [{ key: 'balance', label: 'Punches', value: (done || 0) + ' / ' + (total || DEFAULT_TOTAL) }],
+      secondaryFields: [{ key: 'venue', label: 'Where', value: venueName || APPLE_ORG }],
+      auxiliaryFields: [{ key: 'how', label: 'How', value: 'Tap our tag in-store to earn punches.' }]
+    }
+  }), 'utf8');
+}
+// Build a signed .pkpass Buffer for this device+venue, or null if Apple isn't configured.
+// Same serialNumber on re-add, so a fresh add reflects the latest balance.
+function applePkpass(token, venueId, venueName, done, total) {
+  if (!appleConfigured()) return null;
+  var files = [{ name: 'pass.json', data: applePassJson(token, venueId, venueName, done, total) }];
+  Object.keys(APPLE_ASSETS).forEach(function (n) { files.push({ name: n, data: Buffer.from(APPLE_ASSETS[n], 'base64') }); });
+  var manifest = {};
+  files.forEach(function (f) { manifest[f.name] = crypto.createHash('sha1').update(f.data).digest('hex'); });
+  var manBuf = Buffer.from(JSON.stringify(manifest), 'utf8');
+  var sig = appleSign(manBuf);
+  files.push({ name: 'manifest.json', data: manBuf }, { name: 'signature', data: sig });
+  return zipStore(files);
 }
 
 module.exports = {
   googleConfigured: googleConfigured, appleConfigured: appleConfigured,
-  googleSave: googleSave, googlePatch: googlePatch,
+  googleSave: googleSave, googlePatch: googlePatch, applePkpass: applePkpass,
   // exported for offline tests
   _signJwt: signJwt, _saveUrl: saveUrl, _classBody: classBody, _objectBody: objectBody,
-  _classId: classId, _objectId: objectId, _b64url: b64url
+  _classId: classId, _objectId: objectId, _b64url: b64url, _zipStore: zipStore, _crc32: crc32
 };
