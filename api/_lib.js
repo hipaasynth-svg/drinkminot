@@ -162,7 +162,7 @@ function seedProfile(id) {
   return {
     id: id, name: name, address: row[1], hours: row[2],
     category: row[3], over21: !!row[4], alsoOnEat: !!row[5],
-    claimed: claimed, paid: claimed, featured: claimed, hidden: false, password: hashPw(defaultPassword(name)),
+    claimed: claimed, paid: claimed, featured: claimed, hidden: false, rewardsOn: claimed, password: hashPw(defaultPassword(name)),
     stripeCustomerId: null, stripeSubscriptionId: null,
     hasPhoto: false, hasPickPhoto: [false, false, false],
     picks: claimed ? ['Cold beer cave', 'ND craft & local cans', 'Weekend wine tasting'] : ['', '', ''],
@@ -227,6 +227,12 @@ function normalizeProfile(p) {
   if (typeof p.featured !== 'boolean') p.featured = false;
   if (typeof p.hidden !== 'boolean') p.hidden = false;
   if (typeof p.offer !== 'string') p.offer = '';
+  // rewardsOn is an admin-controlled toggle, independent of claimed/paid — no venue
+  // shows a punch card / earns a reward until this is explicitly on. Profiles saved
+  // before this field existed default from claimed, so an already-live claimed venue's
+  // punch card doesn't silently vanish; a never-claimed venue defaults off, matching
+  // the intent (never promise a reward nobody at that venue has agreed to honor).
+  if (typeof p.rewardsOn !== 'boolean') p.rewardsOn = !!p.claimed;
   // Backfill the static list attributes for profiles saved before these fields existed.
   var row = RAW[p.id - 1];
   if (row) {

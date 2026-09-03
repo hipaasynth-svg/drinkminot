@@ -386,8 +386,14 @@
     var need=S.punchesFor(r), done=Math.min(rec.done, need);
     var ticks='';
     for(var i=0;i<need;i++){ ticks+='<div class="tick'+(i<done?' on':'')+'"></div>'; }
-    var couponActive = rec.coupon && rec.coupon.expiresAt>Date.now();
+    // "Tap. Rate. Earn." is the site's promise, not a per-venue guarantee — rewardsOn is
+    // an explicit admin toggle so a punch card only ever shows where someone has actually
+    // agreed to honor it. Rating stays open to every venue regardless.
+    var couponActive = r.rewardsOn && rec.coupon && rec.coupon.expiresAt>Date.now();
     var coupon = couponActive ? '<div class="coupon"><div><div style="font-size:12px;font-weight:800;color:#7CE05C">'+esc(rec.coupon.reward||'Reward earned!')+'</div><div style="font-size:11px;color:#9FE88C;font-weight:700;margin-top:2px">Code '+esc(rec.coupon.code)+' · exp '+new Date(rec.coupon.expiresAt).toLocaleDateString(undefined,{month:'short',day:'numeric'})+'</div></div><div style="font-size:10px;font-weight:800;color:#1a1430;background:#7CE05C;padding:5px 9px;border-radius:20px">EARNED</div></div>' : '';
+    var rewardCell = r.rewardsOn
+      ? '<div style="text-align:right"><div class="lbl">Your punches</div><div class="ticks">'+ticks+'</div><div class="lbl" style="text-transform:none;margin-top:4px">'+done+'/'+need+'</div></div>'
+      : '<div style="text-align:right;max-width:130px"><div class="lbl" style="text-transform:none;color:var(--muted)">Rewards coming soon here</div></div>';
 
     return '<div class="hero" data-hero="'+r.id+'">'+
         '<div class="stats"><b>'+S.fmtNum(r.upvotes)+'</b><s>upvotes</s></div>'+
@@ -396,9 +402,7 @@
       '<div class="body full">'+
         '<div>'+catRow(r)+'<div class="title">'+esc(r.name)+'</div><div class="meta">'+esc(r.address)+' · '+esc(r.hours)+'</div>'+directionsBtn(r)+'</div>'+
         hhbar+
-        '<div class="row"><div><div class="lbl">Verified ratings</div><div class="num">'+r.totalRatings+'</div></div>'+
-          '<div style="text-align:right"><div class="lbl">Your punches</div><div class="ticks">'+ticks+'</div>'+
-          '<div class="lbl" style="text-transform:none;margin-top:4px">'+done+'/'+need+'</div></div></div>'+
+        '<div class="row"><div><div class="lbl">Verified ratings</div><div class="num">'+r.totalRatings+'</div></div>'+rewardCell+'</div>'+
         billboard+coupon+
       '</div>';
   }
@@ -738,7 +742,8 @@
     pcStage.addEventListener('pointerdown',pcOnDown);
   }
   var wcaps={google:false,apple:false};
-  function walletBtns(){
+  function walletBtns(r){
+    if(!r || !r.rewardsOn) return ''; // no punch card here — nothing to add to a wallet
     var out='';
     if(wcaps.google) out += '<button class="btn ghost walletbtn" id="gwBtn" style="margin-top:8px">＋ Add card to Google Wallet</button>';
     if(wcaps.apple)  out += '<button class="btn ghost walletbtn" id="awBtn" style="margin-top:8px">＋ Add to Apple Wallet</button>';
@@ -767,7 +772,7 @@
     if(!tagVerified){ main = '<div class="ratedmsg" style="color:var(--muted)">👀 Preview — tap our tag in-store to rate</div>'; }
     else if(S.ratedRecently(r.id)){ main = '<div class="ratedmsg">✓ Rated — thanks! Come back in 24h.</div>'; }
     else { main = '<button class="btn accent" id="rateBtn">Rate this visit ★</button>'; }
-    host.innerHTML = main + walletBtns();
+    host.innerHTML = main + walletBtns(r);
     var rb=$('#rateBtn'); if(rb) rb.onclick = openOverlay;
     wireWallet(r);
   }
