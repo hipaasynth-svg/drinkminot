@@ -68,6 +68,10 @@ module.exports = async function (req, res) {
         if (typeof b.paid === 'boolean') { r.paid = b.paid; if (r.paid) r.claimed = true; }
         if (typeof b.featured === 'boolean') { r.featured = b.featured; if (r.featured) r.claimed = true; }
         if (typeof b.hidden === 'boolean') { r.hidden = b.hidden; }
+        // Independent of claimed/paid — an explicit admin call on whether this venue's
+        // punch card / reward is actually authorized, so "Tap. Rate. Earn." is never
+        // shown as active for a venue nobody has agreed to honor a reward for.
+        if (typeof b.rewardsOn === 'boolean') { r.rewardsOn = b.rewardsOn; }
       });
       L.json(res, 200, { ok: true });
       return;

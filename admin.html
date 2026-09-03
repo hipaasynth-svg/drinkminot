@@ -39,6 +39,7 @@
   .chip.paid.on{background:var(--accent);border-color:var(--accent);color:#1a1430}
   .chip.feat.on{background:#B0692A;border-color:#B0692A;color:#fff}
   .chip.hide.on{background:#6E655C;border-color:#6E655C;color:#fff}
+  .chip.rewards.on{background:#2F6B3F;border-color:#2F6B3F;color:#fff}
   .item.hidden-row{opacity:.55}
   label.file{font-size:12px;font-weight:800;color:var(--accent);cursor:pointer}
   label.file input{display:none}
@@ -107,6 +108,7 @@
             '<span class="chip paid'+(r.paid?' on':'')+'" data-paid="'+r.id+'">'+(r.paid?'Paid ✓':'Free')+'</span>'+
             '<span class="chip feat'+(r.featured?' on':'')+'" data-feat="'+r.id+'">'+(r.featured?'Most Wanted ★':'Not featured')+'</span>'+
             '<span class="chip hide'+(r.hidden?' on':'')+'" data-hide="'+r.id+'">'+(r.hidden?'Hidden — show':'Hide')+'</span>'+
+            '<span class="chip rewards'+(r.rewardsOn?' on':'')+'" data-rewards="'+r.id+'">'+(r.rewardsOn?'Rewards ON ★':'Rewards off')+'</span>'+
           '</div>'+
           (r.paid ? pickThumbsHtml(r) : '')+
         '</div></div>';
@@ -140,6 +142,9 @@
     document.querySelectorAll('[data-claim]').forEach(function(el){ el.onclick=function(){ var id=+el.getAttribute('data-claim'), r=all.filter(function(x){return x.id===id;})[0]; S.adminSetFlag(adminPw,id,{claimed:!r.claimed}).then(function(){ reloadList(); }); }; });
     document.querySelectorAll('[data-paid]').forEach(function(el){ el.onclick=function(){ var id=+el.getAttribute('data-paid'), r=all.filter(function(x){return x.id===id;})[0]; S.adminSetFlag(adminPw,id,{paid:!r.paid}).then(function(){ reloadList(); }); }; });
     document.querySelectorAll('[data-feat]').forEach(function(el){ el.onclick=function(){ var id=+el.getAttribute('data-feat'), r=all.filter(function(x){return x.id===id;})[0]; S.adminSetFlag(adminPw,id,{featured:!r.featured}).then(function(){ toast(r.featured?'Removed from Most Wanted':'Added to Minot’s Most Wanted'); reloadList(); }); }; });
+    document.querySelectorAll('[data-rewards]').forEach(function(el){ el.onclick=function(){ var id=+el.getAttribute('data-rewards'), r=all.filter(function(x){return x.id===id;})[0];
+      if(!r.rewardsOn && !confirm('Turn ON the punch card & reward for “'+r.name+'”? Only do this once someone at the venue has agreed to honor “'+esc(r.reward||'the reward')+'.”')) return;
+      S.adminSetFlag(adminPw,id,{rewardsOn:!r.rewardsOn}).then(function(){ toast(r.rewardsOn?'Rewards turned off':'Rewards turned on'); reloadList(); }); }; });
     document.querySelectorAll('[data-hide]').forEach(function(el){ el.onclick=function(){ var id=+el.getAttribute('data-hide'), r=all.filter(function(x){return x.id===id;})[0];
       if(!r.hidden && !confirm('Hide “'+r.name+'” from the public site? Customers won’t see it or be able to rate it. You can show it again anytime.')) return;
       S.adminSetFlag(adminPw,id,{hidden:!r.hidden}).then(function(){ toast(r.hidden?'Now visible to the public':'Hidden from the public'); reloadList(); }); }; });
