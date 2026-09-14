@@ -12,6 +12,10 @@ var L = require('./_lib');
 //   1. The owner's own session (same token/password check as api/owner.js).
 //   2. profile.agentEnabled — a super-admin on/off switch (api/admin.js
 //      setFlag), independent of claimed/paid. Beta: not tied to Stripe yet.
+//
+// An agent run can take 15-30s — vercel.json sets this route's maxDuration to
+// 60s, which needs a Vercel plan that allows it for Node functions (Hobby
+// caps lower). Check your plan's function-duration limit before relying on it.
 var AGENT_URL = (process.env.MINOT_AGENT_URL || '').replace(/\/+$/, '');
 var AGENT_KEY = process.env.MINOT_AGENT_SERVICE_KEY || '';
 var SITE = 'drink';

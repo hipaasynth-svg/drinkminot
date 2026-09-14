@@ -2,6 +2,5 @@
   "cleanUrls": true,
   "functions": {
     "api/agent.js": { "maxDuration": 60 }
-  },
-  "_comment_agent": "An agent run can take 15-30s. 60s needs a Vercel plan that allows it for Node functions (Hobby caps lower) — check your plan's function-duration limit before relying on this."
+  }
 }
