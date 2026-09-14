@@ -254,13 +254,13 @@ Implemented with Stripe's REST API directly (no SDK): `api/checkout.js`,
 | `GOOGLE_WALLET_ISSUER_ID` | Google Wallet punch-card passes (with the SA key below) |
 | `GOOGLE_WALLET_SA_JSON_BASE64` | Google service-account JSON key, base64-encoded |
 | `APPLE_PASS_TYPE_ID` / `APPLE_TEAM_ID` / `APPLE_PASS_CERT_P12_BASE64` / `APPLE_PASS_CERT_PASSWORD` / `APPLE_WWDR_CERT_BASE64` | Apple Wallet passes (all five required; button hidden until then) |
-| `MINOT_AGENT_URL` / `MINOT_AGENT_SERVICE_KEY` | AI Assistant (beta) — proxies `api/agent.js` to the self-hosted [`minot-agent`](https://github.com/hipaasynth-svg/minot-agent) service. Also requires an admin to flip a venue's `agentEnabled` flag in the admin console; without either, the feature stays invisible. |
+| `MINOT_AGENT_URL` / `MINOT_AGENT_SERVICE_KEY` | AI Assistant (beta) — proxies `api/agent.js` to the self-hosted [`minot-agent`](https://github.com/hipaasynth-svg/hipaasynth-svg-minot-agent) service. Also requires an admin to flip a venue's `agentEnabled` flag in the admin console; without either, the feature stays invisible. |
 
 ### AI Assistant (beta)
 An experimental, admin-gated "AI co-pilot" per venue — writes and runs Python in a
 kernel-sandboxed worker (no network access from generated code) to help fill seats
 and turn ratings into reviews. Lives entirely in a separate service
-([`minot-agent`](https://github.com/hipaasynth-svg/minot-agent)) this site only
+([`minot-agent`](https://github.com/hipaasynth-svg/hipaasynth-svg-minot-agent)) this site only
 talks to over HTTP via `api/agent.js`; this repo holds no agent code, no LLM
 credentials, and no operator data beyond the one venue's own public listing. Off
 by default — a super admin turns it on per venue (`admin.html` → "AI Assistant"
