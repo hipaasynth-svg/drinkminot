@@ -72,6 +72,9 @@ module.exports = async function (req, res) {
         // punch card / reward is actually authorized, so "Tap. Rate. Earn." is never
         // shown as active for a venue nobody has agreed to honor a reward for.
         if (typeof b.rewardsOn === 'boolean') { r.rewardsOn = b.rewardsOn; }
+        // AI Assistant (beta) — super-admin on/off switch per venue, independent of
+        // claimed/paid. Not tied to Stripe yet; see api/agent.js for the actual gate.
+        if (typeof b.agentEnabled === 'boolean') { r.agentEnabled = b.agentEnabled; }
       });
       L.json(res, 200, { ok: true });
       return;

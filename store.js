@@ -451,6 +451,16 @@
     return Promise.resolve({ ok: ok2 });
   }
 
+  /* ---------- AI Assistant (beta, minot-agent proxy) ---------- */
+  // Requires the owner's own session (ownerTok/password) and the venue's
+  // agentEnabled flag (super-admin only, see admin.html). Works the same in
+  // local/server mode — the check and the actual work both happen server-side
+  // in api/agent.js, which forwards to the self-hosted minot-agent service.
+  function agentList(pw, id) { return api('agent', 'POST', { id: id, token: ownerTok[id], password: pw, op: 'list' }); }
+  function agentRun(pw, id, templateId, question, ownData, ownDataFormat) {
+    return api('agent', 'POST', { id: id, token: ownerTok[id], password: pw, op: 'run', templateId: templateId, question: question, ownData: ownData, ownDataFormat: ownDataFormat });
+  }
+
   /* ---------- billing (Stripe) ---------- */
   function checkout(id, pw) {
     if (mode !== 'server') return Promise.resolve({ error: 'local' });
@@ -573,6 +583,7 @@
     deviceId: function () { return loadDevice().deviceId; }, deviceBackup: deviceBackup, deviceRestore: deviceRestore, adoptDevice: adoptDevice,
     walletCaps: walletCaps, walletSave: walletSave, walletAppleUrl: walletAppleUrl, walletSync: walletSync,
     ownerLogin: ownerLogin, ownerClaim: ownerClaim, ownerUpdate: ownerUpdate, ownerPhoto: ownerPhoto, ownerPickPhoto: ownerPickPhoto,
+    agentList: agentList, agentRun: agentRun,
     checkout: checkout, confirmUpgrade: confirmUpgrade,
     adminList: adminList, adminPhoto: adminPhoto, adminRemovePhoto: adminRemovePhoto,
     adminPickPhoto: adminPickPhoto, adminRemovePickPhoto: adminRemovePickPhoto,

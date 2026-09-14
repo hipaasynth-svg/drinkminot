@@ -40,6 +40,7 @@
   .chip.feat.on{background:#B0692A;border-color:#B0692A;color:#fff}
   .chip.hide.on{background:#6E655C;border-color:#6E655C;color:#fff}
   .chip.rewards.on{background:#2F6B3F;border-color:#2F6B3F;color:#fff}
+  .chip.agent.on{background:#5B3FA0;border-color:#5B3FA0;color:#fff}
   .item.hidden-row{opacity:.55}
   label.file{font-size:12px;font-weight:800;color:var(--accent);cursor:pointer}
   label.file input{display:none}
@@ -109,6 +110,7 @@
             '<span class="chip feat'+(r.featured?' on':'')+'" data-feat="'+r.id+'">'+(r.featured?'Most Wanted ★':'Not featured')+'</span>'+
             '<span class="chip hide'+(r.hidden?' on':'')+'" data-hide="'+r.id+'">'+(r.hidden?'Hidden — show':'Hide')+'</span>'+
             '<span class="chip rewards'+(r.rewardsOn?' on':'')+'" data-rewards="'+r.id+'">'+(r.rewardsOn?'Rewards ON ★':'Rewards off')+'</span>'+
+            '<span class="chip agent'+(r.agentEnabled?' on':'')+'" data-agent="'+r.id+'">'+(r.agentEnabled?'AI Assistant ON (beta)':'AI Assistant off')+'</span>'+
           '</div>'+
           (r.paid ? pickThumbsHtml(r) : '')+
         '</div></div>';
@@ -148,6 +150,9 @@
     document.querySelectorAll('[data-hide]').forEach(function(el){ el.onclick=function(){ var id=+el.getAttribute('data-hide'), r=all.filter(function(x){return x.id===id;})[0];
       if(!r.hidden && !confirm('Hide “'+r.name+'” from the public site? Customers won’t see it or be able to rate it. You can show it again anytime.')) return;
       S.adminSetFlag(adminPw,id,{hidden:!r.hidden}).then(function(){ toast(r.hidden?'Now visible to the public':'Hidden from the public'); reloadList(); }); }; });
+    document.querySelectorAll('[data-agent]').forEach(function(el){ el.onclick=function(){ var id=+el.getAttribute('data-agent'), r=all.filter(function(x){return x.id===id;})[0];
+      if(!r.agentEnabled && !confirm('Turn ON the AI Assistant (beta) for “'+esc(r.name)+'”? Requires the minot-agent service to be configured (MINOT_AGENT_URL / MINOT_AGENT_SERVICE_KEY).')) return;
+      S.adminSetFlag(adminPw,id,{agentEnabled:!r.agentEnabled}).then(function(){ toast(r.agentEnabled?'AI Assistant turned off':'AI Assistant turned on (beta)'); reloadList(); }); }; });
     document.querySelectorAll('[data-rmpw]').forEach(function(el){ el.onclick=function(){ var id=+el.getAttribute('data-rmpw'); S.adminResetPassword(adminPw,id).then(function(res){ toast(res.ok?'Password reset to default':'Reset failed'); reloadList(); }); }; });
     document.querySelectorAll('[data-showpw]').forEach(function(el){ el.onclick=function(){
       var code=el.parentNode.querySelector('.pwval'); if(!code) return;
