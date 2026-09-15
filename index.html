@@ -835,6 +835,7 @@
       sec('Punch card', fld('Reward','<input type="text" id="fReward" value="'+esc(r.reward||'')+'">')+fld('Punches needed for reward',punchesSelect(r))+fld('Coupon valid for (days)','<input type="number" min="1" id="fDays" value="'+(r.couponValidDays||14)+'" style="width:110px">'))+
       sec('Minot&rsquo;s Most Wanted'+(r.featured?' ★':''), (r.featured?'<div class="lbl" style="text-transform:none;margin-bottom:6px">You&rsquo;re in the Spotlight — this exclusive offer shows on the curated guide.</div>':'<div class="lbl" style="text-transform:none;margin-bottom:6px">A featured-spotlight perk. Guests show their phone before ordering to redeem.</div>')+fld('Exclusive DrinkMinot offer','<input type="text" id="fOffer" maxlength="90" value="'+esc(r.offer||'')+'" placeholder="e.g. Free house pour with any purchase">'))+
       sec('Details', fld('Owner note','<textarea id="fNote" rows="3">'+esc(r.note||'')+'</textarea>')+fld('Website','<input type="text" id="fWebsite" value="'+esc(r.website||'')+'" placeholder="yourplace.com">'))+
+      (r.agentEnabled ? sec('AI Assistant (beta)', agentBlock()) : '')+
       fld('Change password','<input type="password" id="fPw" placeholder="leave blank to keep current">')+
       '<button class="btn accent" id="ownerSave">Save changes</button>'+
       '<button class="btn ghost" id="ownerLogout">Log out</button>';
@@ -857,6 +858,7 @@
       });
     };
     bindDays();
+    if(r.agentEnabled) initAgentBox(r);
     $('#ownerSave').onclick=function(){ saveOwner(r.id); };
     $('#ownerLogout').onclick=function(){ ownerPw=''; goHome(); };
   }
@@ -898,6 +900,57 @@
       happyHour:{ enabled:$('#hhOn').checked, days:days, start:$('#hhStart').value||'15:00', end:$('#hhEnd').value||'18:00', special:$('#hhSpecial').value } };
     if(np && np.trim()) fields.password=np.trim();
     S.ownerUpdate(id, ownerPw, fields).then(function(res){ if(res.ok){ if(np&&np.trim()) ownerPw=np.trim(); toast('Saved'); openDash(id); } else { toast('Save failed'); } });
+  }
+
+  /* ---------- AI Assistant (beta) ---------- */
+  var agentTemplates=[];
+  function agentBlock(){
+    return '<div class="lbl" style="text-transform:none;margin-bottom:6px">Pick a ready-to-run experiment. Results are for you only — nothing publishes automatically.</div>'+
+      '<select id="agentTemplate" style="width:100%;margin-bottom:8px"><option>Loading…</option></select>'+
+      '<div id="agentQuestionWrap" style="display:none"><label class="field"><span style="font-weight:700;color:var(--muted)">Your question</span><input type="text" id="agentQuestion" maxlength="300" placeholder="What do you want to know?"></label></div>'+
+      '<div id="agentDataWrap" style="display:none"><label class="field"><span style="font-weight:700;color:var(--muted)" id="agentDataLabel">Your data (optional)</span><textarea id="agentData" rows="4"></textarea></label></div>'+
+      '<button class="btn accent" id="agentRun" type="button">Run experiment</button>'+
+      '<div id="agentResult" style="margin-top:10px;font-size:14px;line-height:1.5"></div>';
+  }
+  function currentAgentTemplate(){
+    var sel=$('#agentTemplate'); if(!sel) return null;
+    return agentTemplates.filter(function(t){ return t.id===sel.value; })[0] || null;
+  }
+  function updateAgentFormForTemplate(){
+    var t=currentAgentTemplate(), dataWrap=$('#agentDataWrap'), dataLabel=$('#agentDataLabel'), qWrap=$('#agentQuestionWrap');
+    if(!t){ if(dataWrap) dataWrap.style.display='none'; if(qWrap) qWrap.style.display='none'; return; }
+    if(dataWrap) dataWrap.style.display = t.accepts_own_data ? '' : 'none';
+    if(dataLabel) dataLabel.textContent = t.own_data_hint || 'Your data (optional)';
+    if(qWrap) qWrap.style.display = (t.goal==='both') ? '' : 'none';
+  }
+  function initAgentBox(r){
+    var sel=$('#agentTemplate'); if(!sel) return;
+    S.agentList(ownerPw, r.id).then(function(res){
+      if(!res.ok || !Array.isArray(res.data)){ sel.innerHTML='<option value="">Not available right now</option>'; return; }
+      agentTemplates=res.data;
+      if(!agentTemplates.length){ sel.innerHTML='<option value="">No experiments configured yet</option>'; return; }
+      sel.innerHTML=agentTemplates.map(function(t){ return '<option value="'+esc(t.id)+'">'+esc(t.title)+'</option>'; }).join('');
+      sel.onchange=updateAgentFormForTemplate;
+      updateAgentFormForTemplate();
+    }).catch(function(){ sel.innerHTML='<option value="">Not available right now</option>'; });
+    var btn=$('#agentRun'); if(btn) btn.onclick=function(){ runAgent(r); };
+  }
+  function runAgent(r){
+    var t=currentAgentTemplate(); if(!t) return;
+    var box=$('#agentResult'), btn=$('#agentRun');
+    box.innerHTML='<div class="lbl" style="text-transform:none">Working — this can take up to 30 seconds…</div>';
+    if(btn) btn.disabled=true;
+    var question=$('#agentQuestion')?$('#agentQuestion').value:'';
+    var ownData=$('#agentData')?$('#agentData').value:'';
+    S.agentRun(ownerPw, r.id, t.id, question, ownData, 'text').then(function(res){
+      if(btn) btn.disabled=false;
+      if(!res.ok || !res.data){ box.innerHTML='<div class="lbl" style="text-transform:none;color:#F0866B">Could not run that right now.</div>'; return; }
+      var d=res.data;
+      if(d.refused){ box.innerHTML='<div class="lbl" style="text-transform:none;color:#F0866B">'+esc(d.refusal_reason||'Refused.')+'</div>'; return; }
+      var html='<div style="font-weight:800;margin-bottom:4px">'+esc(d.summary||'')+'</div><div>'+esc(d.recommendation||'')+'</div>';
+      if(d.chart_base64){ html+='<img alt="chart" style="max-width:100%;border-radius:10px;margin-top:8px" src="data:image/png;base64,'+d.chart_base64+'">'; }
+      box.innerHTML=html;
+    }).catch(function(){ if(btn) btn.disabled=false; box.innerHTML='<div class="lbl" style="text-transform:none;color:#F0866B">Could not reach the AI Assistant.</div>'; });
   }
 
   function goHome(){ tagId=null; tagVerified=false; showScreen(''); S.refresh().then(function(list){ restaurants=list; renderTrack(); }); }
