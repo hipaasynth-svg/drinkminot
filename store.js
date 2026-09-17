@@ -92,7 +92,9 @@
     ["Superior Nutrition Minot", "Minot, ND", "Verify hours", "Juice & Nutrition", false, false],
     ["Minot Nutrition Addiction", "Minot, ND", "Verify hours", "Juice & Nutrition", false, false],
     ["Down Under Bar", "Minot, ND", "Mon-Thu 10am-10pm, Fri-Sat 10am-12am, Sun 11am-10pm", "Bars & Lounges", true, false],
-    ["Grainhopper", "Minot, ND", "Verify hours", "Breweries & Taprooms", true, false]
+    ["Grainhopper", "Minot, ND", "Verify hours", "Breweries & Taprooms", true, false],
+    ["The Grain Hopper Casino & Lounge", "Minot, ND", "Mon-Sat 10am-1am, Sun 12pm-1am", "Casinos & Gaming", true, false],
+    ["Oasis Lounge (Grand Oasis Hotel)", "Minot, ND", "Mon-Thu 4pm-11pm, Fri-Sat 4pm-1am, Sun Closed", "Bars & Lounges", true, false]
   ];
   var DEFAULT_CATEGORY = 'Other';
   // Static attributes for a given venue id, read straight from the frozen RAW table so
