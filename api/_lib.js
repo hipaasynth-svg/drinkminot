@@ -151,7 +151,7 @@ function verifyToken(tok) {
 // 1-based RAW positions and are NEVER reused or renumbered: every surviving venue keeps its
 // original id, so its Redis-stored photo/votes/profile (all keyed by id) stay correct and the
 // admin tag URLs (/?r=<id>) stay accurate. Gaps in the id sequence here are intentional.
-var REMOVED = { 20: true, 21: true, 22: true, 31: true, 34: true, 35: true, 36: true, 37: true };
+var REMOVED = { 2: true, 3: true, 6: true, 20: true, 21: true, 22: true, 23: true, 25: true, 26: true, 27: true, 28: true, 29: true, 30: true, 31: true, 34: true, 35: true, 36: true, 37: true, 41: true, 42: true, 43: true, 45: true, 46: true, 47: true, 48: true, 49: true, 50: true, 51: true, 52: true, 53: true, 54: true, 55: true, 56: true, 58: true, 59: true, 61: true, 62: true };
 function isRemoved(id) { return !!REMOVED[parseInt(id, 10)]; }
 function seedIds() { return RAW.map(function (_, i) { return i + 1; }).filter(function (id) { return !REMOVED[id]; }); }
 // Profile only — no vote counters here. Votes live in their own hash (see vKey) and are
