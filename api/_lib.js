@@ -89,7 +89,9 @@ var RAW = [
   ["Superior Nutrition Minot", "Minot, ND", "Verify hours", "Juice & Nutrition", false, false],
   ["Minot Nutrition Addiction", "Minot, ND", "Verify hours", "Juice & Nutrition", false, false],
   ["Down Under Bar", "Minot, ND", "Mon-Thu 10am-10pm, Fri-Sat 10am-12am, Sun 11am-10pm", "Bars & Lounges", true, false],
-  ["Grainhopper", "Minot, ND", "Verify hours", "Breweries & Taprooms", true, false]
+  ["Grainhopper", "Minot, ND", "Verify hours", "Breweries & Taprooms", true, false],
+  ["The Grain Hopper Casino & Lounge", "Minot, ND", "Mon-Sat 10am-1am, Sun 12pm-1am", "Casinos & Gaming", true, false],
+  ["Oasis Lounge (Grand Oasis Hotel)", "Minot, ND", "Mon-Thu 4pm-11pm, Fri-Sat 4pm-1am, Sun Closed", "Bars & Lounges", true, false]
 ];
 
 function slug(name) { return String(name).toLowerCase().replace(/[^a-z0-9]/g, ''); }
@@ -149,7 +151,7 @@ function verifyToken(tok) {
 // 1-based RAW positions and are NEVER reused or renumbered: every surviving venue keeps its
 // original id, so its Redis-stored photo/votes/profile (all keyed by id) stay correct and the
 // admin tag URLs (/?r=<id>) stay accurate. Gaps in the id sequence here are intentional.
-var REMOVED = { 20: true, 21: true, 22: true, 31: true, 34: true, 35: true, 36: true, 37: true };
+var REMOVED = { 2: true, 3: true, 6: true, 20: true, 21: true, 22: true, 23: true, 25: true, 26: true, 27: true, 28: true, 29: true, 30: true, 31: true, 34: true, 35: true, 36: true, 37: true, 41: true, 42: true, 43: true, 45: true, 46: true, 47: true, 48: true, 49: true, 50: true, 51: true, 52: true, 53: true, 54: true, 55: true, 56: true, 58: true, 59: true, 61: true, 62: true };
 function isRemoved(id) { return !!REMOVED[parseInt(id, 10)]; }
 function seedIds() { return RAW.map(function (_, i) { return i + 1; }).filter(function (id) { return !REMOVED[id]; }); }
 // Profile only — no vote counters here. Votes live in their own hash (see vKey) and are

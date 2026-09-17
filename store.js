@@ -92,7 +92,9 @@
     ["Superior Nutrition Minot", "Minot, ND", "Verify hours", "Juice & Nutrition", false, false],
     ["Minot Nutrition Addiction", "Minot, ND", "Verify hours", "Juice & Nutrition", false, false],
     ["Down Under Bar", "Minot, ND", "Mon-Thu 10am-10pm, Fri-Sat 10am-12am, Sun 11am-10pm", "Bars & Lounges", true, false],
-    ["Grainhopper", "Minot, ND", "Verify hours", "Breweries & Taprooms", true, false]
+    ["Grainhopper", "Minot, ND", "Verify hours", "Breweries & Taprooms", true, false],
+    ["The Grain Hopper Casino & Lounge", "Minot, ND", "Mon-Sat 10am-1am, Sun 12pm-1am", "Casinos & Gaming", true, false],
+    ["Oasis Lounge (Grand Oasis Hotel)", "Minot, ND", "Mon-Thu 4pm-11pm, Fri-Sat 4pm-1am, Sun Closed", "Bars & Lounges", true, false]
   ];
   var DEFAULT_CATEGORY = 'Other';
   // Static attributes for a given venue id, read straight from the frozen RAW table so
@@ -110,7 +112,7 @@
   // never reused, so surviving venues keep their id (and their server-stored photo). Filtered
   // here — the single render choke point — so they vanish even for returning visitors whose
   // localStorage was seeded with the full list before the removal.
-  var REMOVED = { 20: true, 21: true, 22: true, 31: true, 34: true, 35: true, 36: true, 37: true };
+  var REMOVED = { 2: true, 3: true, 6: true, 20: true, 21: true, 22: true, 23: true, 25: true, 26: true, 27: true, 28: true, 29: true, 30: true, 31: true, 34: true, 35: true, 36: true, 37: true, 41: true, 42: true, 43: true, 45: true, 46: true, 47: true, 48: true, 49: true, 50: true, 51: true, 52: true, 53: true, 54: true, 55: true, 56: true, 58: true, 59: true, 61: true, 62: true };
   function decorateList(list) {
     return list.filter(function (r) { return !REMOVED[r.id] && !r.hidden; }).map(function (r) {
       withRating(r);
