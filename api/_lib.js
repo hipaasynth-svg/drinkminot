@@ -35,8 +35,8 @@ var RAW = [
   ["Arny's 2.0 / Off the Vine", "15 Main St S, Minot, ND 58701", "Verify hours", "Liquor & Bottle Shops", true, true],
   ["Aces Lounge & Casino", "Minot, ND", "Verify hours", "Casinos & Gaming", true, false],
   ["Blue Rider", "Minot, ND", "Verify hours", "Bars & Lounges", true, false],
-  ["Bootlegrz", "Minot, ND", "Verify hours", "Bars & Lounges", true, false],
-  ["Capri Bar", "Minot, ND", "Verify hours", "Bars & Lounges", true, false],
+  ["Bootlegrz", "Minot, ND", "Mon-Thu 11am-1am, Fri-Sat 11am-2am, Sun 12pm-1am", "Bars & Lounges", true, false],
+  ["Capri Bar", "Minot, ND", "Mon-Sat 10am-1:30am, Sun 11am-1:30am", "Bars & Lounges", true, false],
   ["Ebeneezer's Eatery & Irish Pub", "300 E Central Ave, Minot, ND 58701", "Daily 7am-1am (kitchen closes ~10pm)", "Bars & Lounges", true, true],
   ["Lucky Strike Lounge", "Minot, ND", "Verify hours", "Bars & Lounges", true, false],
   ["On the Rocks Lounge", "Minot, ND", "Verify hours", "Bars & Lounges", true, false],
@@ -63,7 +63,7 @@ var RAW = [
   ["Hampton Inn", "Minot, ND", "Verify hours", "Hotels", false, false],
   ["Hyatt House", "Minot, ND", "Verify hours", "Hotels", false, false],
   ["The Grand Hotel", "1505 N Broadway, Minot, ND 58703", "Verify hours", "Hotels", false, false],
-  ["Dakota Inn Trappers Lounge", "Minot, ND", "Verify hours", "Bars & Lounges", true, false],
+  ["Dakota Inn Trappers Lounge", "Minot, ND", "Mon-Thu 4pm-11pm, Fri-Sat 4pm-1am, Sun Closed", "Bars & Lounges", true, false],
   ["Moose Lodge", "Minot, ND", "Verify hours", "Clubs & Lodges", true, false],
   ["VFW", "Minot, ND", "Verify hours", "Clubs & Lodges", true, false],
   ["Vardon Golf Club", "Minot, ND", "Verify hours", "Golf Clubs", false, false],
@@ -88,7 +88,7 @@ var RAW = [
   ["Blissful Bee Juicery", "North & South locations, Minot, ND", "Verify hours", "Juice & Nutrition", false, false],
   ["Superior Nutrition Minot", "Minot, ND", "Verify hours", "Juice & Nutrition", false, false],
   ["Minot Nutrition Addiction", "Minot, ND", "Verify hours", "Juice & Nutrition", false, false],
-  ["Down Under Bar", "Minot, ND", "Mon-Thu 10am-10pm, Fri 10am-12am, Sat verify, Sun 11am-10pm", "Bars & Lounges", true, false],
+  ["Down Under Bar", "Minot, ND", "Mon-Thu 10am-10pm, Fri-Sat 10am-12am, Sun 11am-10pm", "Bars & Lounges", true, false],
   ["Grainhopper", "Minot, ND", "Verify hours", "Breweries & Taprooms", true, false]
 ];
 
