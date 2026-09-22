@@ -88,11 +88,16 @@
     var q=($('#search').value||'').toLowerCase();
     var rs=all.filter(function(r){return r.name.toLowerCase().indexOf(q)>-1;});
     $('#list').innerHTML=rs.map(function(r){
-      var def = r.defaultPassword || S.defaultPassword(r.name);
-      var changed = (r.passwordChanged!==undefined) ? r.passwordChanged : (r.password!==undefined && r.password!==def);
-      var pwLine = changed
-        ? 'Owner password: <b>changed by owner</b> · <span class="chip" data-rmpw="'+r.id+'">Reset to default</span>'
-        : 'Owner password: <code class="pwval" data-pwval="'+esc(def)+'">••••••••</code> <span class="chip" data-showpw="'+r.id+'">Show</span>';
+      // There is no longer any password derived from the venue name. An unclaimed listing
+      // is onboarded with its own random setup code (hand it over with the tags); a claimed
+      // one can only have a fresh random password generated, shown once.
+      var setupUrl = location.origin + '/?owner=' + r.id + (r.claimCode ? '&c=' + encodeURIComponent(r.claimCode) : '');
+      var pwLine = r.claimed
+        ? 'Owner password: <b>'+(r.hasPassword?'set by owner':'not set')+'</b> · <span class="chip" data-rmpw="'+r.id+'">Generate new password</span>'
+        : 'Setup code: <code class="pwval" data-pwval="'+esc(r.claimCode||'')+'">••••••••</code> '+
+          '<span class="chip" data-showpw="'+r.id+'">Show</span>'+
+          '<span class="chip" data-copytag="'+esc(setupUrl)+'">Copy setup link</span>'+
+          '<span class="chip" data-newcode="'+r.id+'">New code</span>';
       var tagUrl = location.origin + '/?r=' + r.id;
       var badges = (r.category?'<span class="b cat">'+esc(r.category)+'</span>':'')+(r.alsoOnEat?'<span class="b eat">🍔 Also on EatMinot</span>':'');
       return '<div class="item'+(r.hidden?' hidden-row':'')+'" data-id="'+r.id+'">'+
@@ -153,7 +158,22 @@
     document.querySelectorAll('[data-agent]').forEach(function(el){ el.onclick=function(){ var id=+el.getAttribute('data-agent'), r=all.filter(function(x){return x.id===id;})[0];
       if(!r.agentEnabled && !confirm('Turn ON the AI Assistant (beta) for “'+esc(r.name)+'”? Requires the minot-agent service to be configured (MINOT_AGENT_URL / MINOT_AGENT_SERVICE_KEY).')) return;
       S.adminSetFlag(adminPw,id,{agentEnabled:!r.agentEnabled}).then(function(){ toast(r.agentEnabled?'AI Assistant turned off':'AI Assistant turned on (beta)'); reloadList(); }); }; });
-    document.querySelectorAll('[data-rmpw]').forEach(function(el){ el.onclick=function(){ var id=+el.getAttribute('data-rmpw'); S.adminResetPassword(adminPw,id).then(function(res){ toast(res.ok?'Password reset to default':'Reset failed'); reloadList(); }); }; });
+    document.querySelectorAll('[data-rmpw]').forEach(function(el){ el.onclick=function(){
+      var id=+el.getAttribute('data-rmpw');
+      S.adminResetPassword(adminPw,id).then(function(res){
+        // Shown once on purpose: only the hash is stored, so there is nothing to look up
+        // later. Copy it before dismissing.
+        if(res.ok && res.password){ prompt('New password for this venue — copy it now, it is not stored anywhere and cannot be shown again:', res.password); toast('New password generated'); }
+        else if(res.reason==='not_claimed'){ toast('Not claimed yet — use its setup code instead'); }
+        else { toast('Reset failed'); }
+        reloadList();
+      });
+    }; });
+    document.querySelectorAll('[data-newcode]').forEach(function(el){ el.onclick=function(){
+      var id=+el.getAttribute('data-newcode');
+      if(!confirm('Issue a new setup code for this venue? The old code stops working immediately.')) return;
+      S.adminNewClaimCode(adminPw,id).then(function(res){ toast(res.ok?'New setup code issued':'Could not issue a code'); reloadList(); });
+    }; });
     document.querySelectorAll('[data-showpw]').forEach(function(el){ el.onclick=function(){
       var code=el.parentNode.querySelector('.pwval'); if(!code) return;
       var shown=code.getAttribute('data-shown')==='1';

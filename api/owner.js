@@ -12,6 +12,13 @@ module.exports = async function (req, res) {
     if (!profile) { L.json(res, 404, { error: 'not_found' }); return; }
 
     if (b.action === 'login') {
+      // A listing nobody has claimed has no owner to log in as. This is the gate that
+      // closes the old hole: every venue used to be seeded with a password derived from
+      // its own name, so any stranger could log in as any venue. An unclaimed profile is
+      // now refused before its stored password is even considered, which also neutralises
+      // records already saved with that old derivable hash.
+      if (!profile.claimed) { L.json(res, 403, { error: 'not_claimed' }); return; }
+      if (!profile.password) { L.json(res, 403, { error: 'no_password' }); return; }
       if (!L.verifyPw(b.password, profile.password)) { L.json(res, 401, { error: 'bad_password' }); return; }
       L.json(res, 200, { ok: true, id: profile.id, name: profile.name, paid: profile.paid, token: L.signToken(profile.id) });
       return;
@@ -22,6 +29,11 @@ module.exports = async function (req, res) {
     // closed and the owner must log in. One-time by construction — the claimed flag.
     if (b.action === 'claim') {
       if (profile.claimed) { L.json(res, 409, { error: 'already_claimed' }); return; }
+      // The claim code is a random per-venue secret shown only in the admin console and
+      // handed over in person with the tags (?owner=<id>&c=<code>). Venue ids are
+      // sequential and printed on every tag, so the id alone proves nothing; without the
+      // code, anyone could have seized any listing they hadn't claimed yet.
+      if (!L.verifyClaimCode(profile, b.code)) { L.json(res, 401, { error: 'bad_code' }); return; }
       var np = String(b.password || '').trim();
       if (np.length < 4) { L.json(res, 400, { error: 'weak_password' }); return; }
       await L.updateProfile(profile.id, function (p) { p.password = L.hashPw(np); p.claimed = true; });

@@ -31,7 +31,9 @@ Everything below is the same architecture as EatMinot, plus two twin-specific fe
 
 ## Categories
 
-62 seeded Minot venues, grouped & alphabetized by category at render time:
+66 seeded Minot venues, of which **29 are currently live** — the rest are held back via the
+`REMOVED` id-map pending a photo (see "Notes & remaining for later"). Grouped &
+alphabetized by category at render time:
 
 | Category | 21+? | Examples |
 |----------|:----:|----------|
@@ -56,7 +58,7 @@ family restaurants that merely serve alcohol are not.
 |------|---------|
 | `index.html` | Public app + owner login + owner dashboard |
 | `guide.html` | "Minot's Most Wanted" — a curated, hand-picked landing page (optional `?hotel=` co-brand) |
-| `admin.html` | Operator admin (upload photos, toggle Claimed/Paid/Featured, hide/show, see owner passwords) |
+| `admin.html` | Operator admin (upload photos, toggle Claimed/Paid/Featured, hide/show, hand out setup codes) |
 | `store.js`   | Shared data model, seed list, persistence, helpers |
 
 Open `index.html` for the customer experience; `admin.html` for the operator console.
@@ -105,16 +107,36 @@ Open `index.html` for the customer experience; `admin.html` for the operator con
   free claimed owners can edit the rest.
 - **Admin console** — upload a photo for any venue, toggle Claimed/Paid, add to **Minot's
   Most Wanted** (Featured), **hide/show a venue** (pulls it from the public list, tag page,
-  Most Wanted and rating while keeping it in the admin panel to restore), view/hand out owner
-  passwords (or reset one to default), copy each venue's tag URL, reset demo data. The 21+ and
+  Most Wanted and rating while keeping it in the admin panel to restore), hand out a listing's
+  setup code or generate a new owner password, copy each venue's tag URL, reset demo data. The 21+ and
   cross-listing flags are shown per venue. No admin action writes to a vote counter — those
   only move via a real rating.
 
-### Default credentials
-- **Owner login:** pick your venue, password = its name (letters only) + `26`
-  (e.g. `capribar26`). Changeable in the dashboard; each password is listed in the admin
-  console. Owners who lose it can email `cody@drinkminot.com`.
-- **Admin:** `drink-admin` (changeable inside the admin console / `DRINK_ADMIN_PASSWORD`).
+### Owner onboarding (no default passwords)
+There is deliberately **no formula that turns a venue's name into its credential**, and no
+password is seeded for any listing. A venue is onboarded like this:
+
+1. The admin console shows that listing's **setup code** — a random 8-character code,
+   generated once per venue and stored on its profile. Hand it over with the tags (the
+   "Copy setup link" button gives you `/?owner=<id>&c=<code>` for the packet QR).
+2. The owner opens that link, enters the setup code, and picks their own password. That
+   claims the listing, and the code is spent.
+3. After that, only their password works. A listing nobody has claimed cannot be logged
+   into at all — there is no password on it to guess.
+
+If an owner loses their password, an admin generates a new random one from the console
+(shown once — only the salted hash is stored). If a setup card goes astray before the
+listing is claimed, "New code" issues a fresh code and invalidates the old one. Owners
+can email `cody@drinkminot.com`.
+
+> An earlier version seeded every listing with its name + `26`, this file published the
+> formula, and the login screen itself suggested it — so any listing could be logged into
+> by anyone who could read its name. `tests/auth.test.js` covers that case specifically so
+> it cannot come back.
+
+- **Admin password:** set `DRINK_ADMIN_PASSWORD` in Vercel. There is a development fallback
+  in `api/_lib.js` for local use; **treat any deployment without that variable set as an
+  open admin console** and set it before going live.
 
 ## Shared database (turn on cross-device sync)
 
@@ -147,7 +169,7 @@ via Upstash's pipeline endpoint.
    automatically.
 2. **Redeploy** (Deployments → ⋯ → Redeploy) so the functions pick up the new env vars.
 3. Done — the app flips to shared mode on the next load. (Optional: set
-   `DRINK_ADMIN_PASSWORD` to change the admin password from the `drink-admin` default.)
+   `DRINK_ADMIN_PASSWORD` — required before going live; see "Owner onboarding" above.)
 
 Photos are stored under separate Redis keys and downscaled client-side to keep them small.
 
@@ -214,8 +236,10 @@ so tokens can't be forged. If it's ever left unset, the code signs with a random
 generated fresh per cold start instead of a fixed fallback — an unset secret just logs owners
 out on redeploy, never a silent hole.
 
-The admin console never shows password hashes: it shows each owner's **default** password
-(name + `26`) and flags any that an owner has changed, with a one-click **Reset to default**.
+The admin console never shows password hashes, and there is no default password to show.
+For an unclaimed listing it shows that venue's **setup code**; for a claimed one it shows
+only whether a password has been set, with a **Generate new password** action that returns
+a fresh random password once.
 
 ## Billing — $59/mo Claimed tier (Stripe)
 
@@ -247,7 +271,7 @@ Implemented with Stripe's REST API directly (no SDK): `api/checkout.js`,
 |-----|---------|
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Shared database (auto-added by Vercel's Upstash Redis) |
 | `DRINK_SESSION_SECRET` | Unforgeable owner session tokens |
-| `DRINK_ADMIN_PASSWORD` | Overrides the `drink-admin` admin default |
+| `DRINK_ADMIN_PASSWORD` | The admin-console password. **Set this before going live.** |
 | `STRIPE_SECRET_KEY` | Live $59/mo Stripe checkout |
 | `STRIPE_WEBHOOK_SECRET` | Auto status sync (cancellations) |
 | `STRIPE_PRICE_ID` | Use a fixed Stripe Price instead of the inline $59/mo |
