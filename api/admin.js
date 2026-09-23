@@ -25,9 +25,41 @@ module.exports = async function (req, res) {
         // person) and whether a password has been set yet. claimCode is deliberately kept
         // here and stripped in publicView; this response is admin-authenticated.
         o.hasPassword = !!r.password;
+        delete o.staffPin;
+        o.hasStaffPin = !!r.staffPin;
+        // The signed tag URL to print or program onto this venue's tag. Deterministic,
+        // so it never changes unless DRINK_TAG_SECRET is rotated — an already-printed tag
+        // stays valid forever. Empty when no secret is configured, in which case
+        // signatures can't be issued or enforced at all.
+        o.tagSig = L.tagSigFor(r.id);
         return o;
       });
-      L.json(res, 200, { ok: true, restaurants: out });
+      L.json(res, 200, {
+        ok: true, restaurants: out,
+        // Surfaced so the console can say plainly where the tag migration stands rather
+        // than leaving "verified presence" as an assumption.
+        tagSigAvailable: !!L.tagSigFor(1),
+        tagSigEnforced: L.tagSigEnforced()
+      });
+      return;
+    }
+    // Coupon accounting — the first owner-visible number that proves the loyalty card
+    // did anything: issued vs redeemed per venue. Scans the coupon records rather than
+    // keeping a counter, so it can never drift from the records themselves.
+    if (b.action === 'couponStats') {
+      var statIds = L.seedIds();
+      var stats = {};
+      for (var s2 = 0; s2 < statIds.length; s2++) stats[statIds[s2]] = { issued: 0, redeemed: 0, outstanding: 0, expired: 0 };
+      var scanned = await L.scanCoupons();
+      scanned.forEach(function (c) {
+        var row = stats[c.venueId];
+        if (!row) return;
+        row.issued++;
+        if (c.redeemedAt) row.redeemed++;
+        else if (c.expiresAt && Date.now() > c.expiresAt) row.expired++;
+        else row.outstanding++;
+      });
+      L.json(res, 200, { ok: true, stats: stats, total: scanned.length });
       return;
     }
     if (b.action === 'reset') {

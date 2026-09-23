@@ -66,6 +66,7 @@
 
   <div id="panel" style="display:none">
     <div class="note" id="modeNote"></div>
+    <div class="note" id="tagBanner" style="display:none;border-width:1px;border-style:solid"></div>
     <div class="tools">
       <input type="text" id="search" placeholder="Search venues…">
       <button class="btn ghost" id="resetAll">Reset data</button>
@@ -84,6 +85,46 @@
   function toast(m){var t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('show');},1700);}
   function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 
+  // Says plainly whether ratings are cryptographically gated yet. Without this the state
+  // is invisible and "verified presence" is an assumption rather than a fact.
+  function renderTagBanner(meta){
+    var el = document.getElementById('tagBanner');
+    if(!el) return;
+    el.style.display='block';
+    if(!meta || !meta.tagSigAvailable){
+      el.style.background='#33211B'; el.style.borderColor='#4E2F24'; el.style.color='#F0866B';
+      el.innerHTML = '<b>Tag signatures are not configured.</b> Ratings are accepted without proof of presence. '+
+        'Set <code>DRINK_TAG_SECRET</code> in Vercel to a long random string, redeploy, then reprogram the tags using the links below.';
+      return;
+    }
+    if(!meta.tagSigEnforced){
+      el.style.background='#2E2416'; el.style.borderColor='#4A3B1E'; el.style.color='#E9C46A';
+      el.innerHTML = '<b>Tag signatures are issued but not yet required.</b> Old tags (no <code>&amp;t=</code>) still work, so nothing is broken mid-migration. '+
+        'Once every tag below has been reprinted or reprogrammed, set <code>DRINK_REQUIRE_TAG_SIG=1</code> in Vercel to start refusing unsigned ratings.';
+      return;
+    }
+    el.style.background='#1E2E20'; el.style.borderColor='#31492F'; el.style.color='#7CE05C';
+    el.innerHTML = '<b>Tag signatures are required.</b> A rating without a valid tag signature is refused. Any tag still carrying a bare <code>/?r=&lt;id&gt;</code> link will no longer work — reprogram it from the link below.';
+  }
+
+  /* Redemption readiness and the only hard number the loyalty card produces: how many
+     rewards were issued versus actually handed over. A venue with rewards on but no staff
+     PIN is called out, because in that state a customer can earn a reward nobody can
+     redeem. */
+  function rewardsLine(r){
+    if(!r.rewardsOn) return '';
+    var st = couponStats && couponStats[r.id];
+    var pin = r.hasStaffPin
+      ? '<b style="color:#7CE05C">staff PIN set</b>'
+      : '<b style="color:#F0866B">no staff PIN — rewards cannot be redeemed</b>';
+    var nums = st
+      ? ' · ' + st.issued + ' issued, <b>' + st.redeemed + ' redeemed</b>' +
+        (st.outstanding ? ', ' + st.outstanding + ' outstanding' : '') +
+        (st.expired ? ', ' + st.expired + ' expired' : '')
+      : '';
+    return '<div class="pw">Rewards: ' + pin + nums + '</div>';
+  }
+
   function render(){
     var q=($('#search').value||'').toLowerCase();
     var rs=all.filter(function(r){return r.name.toLowerCase().indexOf(q)>-1;});
@@ -98,7 +139,11 @@
           '<span class="chip" data-showpw="'+r.id+'">Show</span>'+
           '<span class="chip" data-copytag="'+esc(setupUrl)+'">Copy setup link</span>'+
           '<span class="chip" data-newcode="'+r.id+'">New code</span>';
-      var tagUrl = location.origin + '/?r=' + r.id;
+      // The tag URL now carries the venue's signature. Deterministic, so this string never
+      // changes and a tag printed today stays valid — but an OLD tag (no &t=) only keeps
+      // working until DRINK_REQUIRE_TAG_SIG is switched on, so reprint or reprogram from
+      // here before flipping it.
+      var tagUrl = location.origin + '/?r=' + r.id + (r.tagSig ? '&t=' + r.tagSig : '');
       var badges = (r.category?'<span class="b cat">'+esc(r.category)+'</span>':'')+(r.alsoOnEat?'<span class="b eat">🍔 Also on EatMinot</span>':'');
       return '<div class="item'+(r.hidden?' hidden-row':'')+'" data-id="'+r.id+'">'+
         '<div class="thumb" data-thumb="'+r.id+'">'+(r.over21?'<span class="s21">21+</span>':'')+(r.hasPhoto?'':'No photo')+'</div>'+
@@ -107,6 +152,7 @@
           '<div class="ad">'+esc(r.address)+'</div>'+
           '<div class="pw">'+pwLine+'</div>'+
           '<div class="tag">NFC/QR link: <code>'+esc(tagUrl)+'</code><span class="chip" data-copytag="'+esc(tagUrl)+'">Copy</span></div>'+
+          rewardsLine(r)+
           '<div class="ctl">'+
             '<label class="file">Upload photo<input type="file" accept="image/*" data-photo="'+r.id+'"></label>'+
             (r.hasPhoto?'<span class="chip" data-rmphoto="'+r.id+'">Remove photo</span>':'')+
@@ -137,7 +183,24 @@
     }
     return out+'</div>';
   }
-  function reloadList(){ return S.adminList(adminPw).then(function(res){ if(res.ok){ all=res.restaurants; render(); } return res; }); }
+  // The tag-signature state from the last list call, kept so a later re-render (when
+  // coupon stats arrive) redraws the banner from the real values instead of guessing.
+  var tagMeta = null, couponStats = null;
+  function reloadList(){
+    return S.adminList(adminPw).then(function(res){
+      if(res.ok){ all=res.restaurants; tagMeta=res; render(); renderTagBanner(tagMeta); loadCouponStats(); }
+      return res;
+    });
+  }
+  // Fetched separately because it scans the coupon records, a heavier read than the venue
+  // list, and should not hold up rendering it.
+  function loadCouponStats(){
+    if(!S.adminCouponStats) return;
+    S.adminCouponStats(adminPw).then(function(res){
+      if(!res.ok) return;
+      couponStats = res.stats; render(); renderTagBanner(tagMeta);
+    }).catch(function(){});
+  }
   function wire(){
     document.querySelectorAll('[data-photo]').forEach(function(el){ el.onchange=function(e){ var id=+el.getAttribute('data-photo'), f=e.target.files[0]; if(!f) return;
       S.fileToDataUrl(f).then(function(url){ return S.adminPhoto(adminPw,id,url); }).then(function(res){ toast(res.ok?'Photo uploaded':'Upload failed'); reloadList(); }).catch(function(){toast('Could not read image');}); }; });

@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Redeem a reward</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<!-- Public redemption page. Opened by scanning the QR on a customer's reward, which
+     carries only the coupon code (?c=). Any staff member can use it from their own
+     phone: no app, no venue login, no shared device. The venue's 6-digit staff PIN is
+     what authorises the burn, so a passer-by who scans the same QR cannot spend
+     someone else's reward. Failed PINs are rate-limited server-side per coupon, per
+     venue and per IP — see api/coupon.js. -->
+<style>
+  :root{
+    --paper:#FBF7F0; --card:#fff; --edge:#E6D6BE; --ink:#4A392E; --espresso:#3A2A20;
+    --stone:#7C7267; --good:#2F6B3F; --good-soft:#E8F3EA; --good-edge:#B9DDC0;
+    --bad:#A8442B; --bad-soft:#F7E8E3; --bad-edge:#E8C9BF; --accent:#B4762F;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#221913; --card:#2E2219; --edge:#453324; --ink:#E4D5C3; --espresso:#F3E7D6;
+      --stone:#A99B8B; --good:#93B285; --good-soft:#26301F; --good-edge:#3C4A32;
+      --bad:#E08A6B; --bad-soft:#33211B; --bad-edge:#4E2F24; --accent:#D89547;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#221913; --card:#2E2219; --edge:#453324; --ink:#E4D5C3; --espresso:#F3E7D6;
+    --stone:#A99B8B; --good:#93B285; --good-soft:#26301F; --good-edge:#3C4A32;
+    --bad:#E08A6B; --bad-soft:#33211B; --bad-edge:#4E2F24; --accent:#D89547;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--paper)}
+  body{font-family:"Segoe UI",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased}
+  .rounded{font-family:ui-rounded,"SF Pro Rounded","Nunito","Segoe UI",system-ui,sans-serif}
+  .wrap{max-width:440px;margin:0 auto;padding:28px 16px 48px}
+  .brand{text-align:center;font-weight:800;letter-spacing:-.02em;font-size:20px;margin-bottom:4px}
+  .brand .a{color:var(--espresso)} .brand .b{color:var(--accent)}
+  .sub{text-align:center;color:var(--stone);font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;margin-bottom:22px}
+  .card{background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:20px;box-shadow:0 2px 14px rgba(58,42,32,.06)}
+  h1{font-family:ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif;color:var(--espresso);font-size:21px;font-weight:800;margin:0 0 4px;letter-spacing:-.01em}
+  .venue{color:var(--stone);font-size:14px;font-weight:700;margin-bottom:16px}
+  .reward{background:var(--good-soft);border:1px solid var(--good-edge);border-radius:12px;padding:14px;margin-bottom:16px}
+  .reward .r{font-weight:800;color:var(--good);font-size:16px}
+  .reward .m{font-size:12px;color:var(--stone);font-weight:700;margin-top:4px}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;letter-spacing:.06em}
+  label{display:block;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--stone);margin-bottom:6px}
+  input{width:100%;padding:14px;border:1.5px solid var(--edge);border-radius:12px;background:var(--paper);color:var(--ink);
+    font-size:26px;text-align:center;letter-spacing:.34em;font-weight:800;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  input:focus{outline:none;border-color:var(--accent)}
+  button{width:100%;margin-top:14px;padding:15px;border:none;border-radius:12px;background:var(--good);color:#fff;
+    font-size:16px;font-weight:800;cursor:pointer;font-family:inherit}
+  button:disabled{opacity:.55;cursor:default}
+  .msg{margin-top:14px;padding:13px 15px;border-radius:12px;font-size:14px;font-weight:700;display:none}
+  .msg.show{display:block}
+  .msg.err{background:var(--bad-soft);border:1px solid var(--bad-edge);color:var(--bad)}
+  .msg.okk{background:var(--good-soft);border:1px solid var(--good-edge);color:var(--good)}
+  .done{text-align:center;padding:10px 0}
+  .done .tick{font-size:54px;line-height:1;color:var(--good)}
+  .done h2{font-family:ui-rounded,"SF Pro Rounded","Nunito",system-ui,sans-serif;color:var(--good);font-size:24px;margin:10px 0 6px;font-weight:800}
+  .done p{margin:0;font-size:14px;color:var(--ink)}
+  .done .when{color:var(--stone);font-size:12px;font-weight:700;margin-top:10px}
+  .note{color:var(--stone);font-size:12px;text-align:center;margin-top:18px;line-height:1.5}
+</style>
+
+<div class="wrap">
+  <div class="brand rounded"><span class="a">Eat</span><span class="b">Minot</span></div>
+  <div class="sub rounded">staff redemption</div>
+  <div class="card" id="card">
+    <div id="loading" style="text-align:center;color:var(--stone);font-weight:700;padding:18px 0">Checking this reward…</div>
+    <div id="body" style="display:none"></div>
+  </div>
+  <div class="note" id="note"></div>
+</div>
+
+<script>
+(function(){
+  var $ = function(s){ return document.querySelector(s); };
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function fmtDate(ms){ try{ return new Date(ms).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}); }catch(e){ return ''; } }
+  function fmtWhen(ms){ try{ return new Date(ms).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; } }
+  // Display grouping only — the server normalises before comparing, so hyphens and case
+  // never matter to whether a code is accepted.
+  function pretty(code){ var s=String(code||''); return s.length>8 ? s.slice(0,3)+' '+s.slice(3,8)+' '+s.slice(8) : s; }
+
+  function api(payload){
+    return fetch('/api/coupon',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+      .then(function(r){ return r.json().then(function(j){ return {status:r.status, data:j}; }); });
+  }
+
+  var code = '';
+  try { code = new URLSearchParams(location.search).get('c') || ''; } catch(e) {}
+
+  function fail(title, detail){
+    $('#loading').style.display='none';
+    var b=$('#body'); b.style.display='block';
+    b.innerHTML = '<h1>'+esc(title)+'</h1><p style="margin:0;color:var(--stone);font-size:14px">'+esc(detail||'')+'</p>';
+  }
+
+  if(!code){ fail('No reward code', 'Scan the QR code on the customer’s reward, or open the link from their Wallet pass.'); return; }
+
+  api({action:'peek', code:code}).then(function(res){
+    if(res.status===404){ fail('Not a valid reward', 'This code isn’t one of ours. Check you scanned the customer’s reward and not another code.'); return; }
+    if(res.status===429){ fail('Too many checks', 'Give it a few minutes and try again.'); return; }
+    if(!res.data || !res.data.ok){ fail('Could not check this reward', 'Try again in a moment.'); return; }
+
+    var c = res.data.coupon, v = res.data.venue;
+
+    if(c.state === 'redeemed'){
+      fail('Already redeemed', 'This reward was used on ' + fmtWhen(c.redeemedAt) + '. It can only be used once.');
+      return;
+    }
+    if(c.state === 'expired'){
+      fail('Expired', 'This reward expired on ' + fmtDate(c.expiresAt) + '.');
+      return;
+    }
+    if(v && !v.hasStaffPin){
+      fail('No staff PIN set yet', 'The owner needs to set a 6-digit staff PIN in their dashboard before rewards can be redeemed here.');
+      return;
+    }
+
+    $('#loading').style.display='none';
+    var b=$('#body'); b.style.display='block';
+    b.innerHTML =
+      '<h1>Redeem this reward</h1>'+
+      '<div class="venue">'+esc(v && v.name ? v.name : 'This venue')+'</div>'+
+      '<div class="reward"><div class="r">'+esc(c.reward)+'</div>'+
+        '<div class="m">Code <code>'+esc(pretty(c.code))+'</code> · good until '+esc(fmtDate(c.expiresAt))+'</div></div>'+
+      '<label for="pin">Staff PIN</label>'+
+      '<input id="pin" type="tel" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="······">'+
+      '<button id="go">Redeem</button>'+
+      '<div class="msg err" id="msg"></div>';
+    $('#note').textContent = 'Ask any manager for the staff PIN. It is not the customer’s to know.';
+
+    var pin=$('#pin'), go=$('#go'), msg=$('#msg');
+    pin.focus();
+    function showErr(t){ msg.textContent=t; msg.className='msg err show'; }
+
+    function submit(){
+      var v2=(pin.value||'').replace(/\D/g,'');
+      if(v2.length!==6){ showErr('Enter the 6-digit staff PIN.'); return; }
+      go.disabled=true; go.textContent='Redeeming…'; msg.className='msg';
+      api({action:'redeem', code:code, pin:v2}).then(function(r){
+        if(r.status===200 && r.data.ok){
+          var rc=r.data.coupon;
+          $('#body').innerHTML =
+            '<div class="done"><div class="tick">✓</div><h2>Redeemed</h2>'+
+            '<p><b>'+esc(rc.reward)+'</b></p>'+
+            '<p style="color:var(--stone);font-size:13px;margin-top:6px">'+esc(r.data.venue&&r.data.venue.name||'')+'</p>'+
+            '<div class="when">'+esc(fmtWhen(rc.redeemedAt))+' · <code>'+esc(pretty(rc.code))+'</code></div></div>';
+          $('#note').textContent = r.data.walletUpdated
+            ? 'Their Wallet pass has been marked used. This code will not work again.'
+            : 'This code will not work again.';
+          return;
+        }
+        go.disabled=false; go.textContent='Redeem';
+        var e=r.data && r.data.error;
+        if(e==='bad_pin'){
+          var left = r.data.triesLeft;
+          showErr('Wrong PIN.' + (typeof left==='number' && left>0 ? ' ' + left + ' ' + (left===1?'try':'tries') + ' left.' : ''));
+          pin.value=''; pin.focus();
+        }
+        else if(e==='locked'){ showErr('Too many wrong PINs. Try again in about ' + (r.data.retryAfterMin||15) + ' minutes.'); }
+        else if(e==='redeemed'){ showErr('This reward has already been used.'); }
+        else if(e==='expired'){ showErr('This reward has expired.'); }
+        else if(e==='no_pin'){ showErr('No staff PIN is set for this venue yet.'); }
+        else if(e==='unknown'){ showErr('That code isn’t one of ours.'); }
+        else { showErr('Could not redeem. Try again in a moment.'); }
+      }).catch(function(){
+        go.disabled=false; go.textContent='Redeem';
+        showErr('No connection. Check signal and try again.');
+      });
+    }
+    go.onclick=submit;
+    pin.addEventListener('keydown',function(e){ if(e.key==='Enter') submit(); });
+  }).catch(function(){
+    fail('Could not check this reward', 'No connection. Check signal and try again.');
+  });
+})();
+</script>
+</html>

@@ -8,6 +8,6 @@
     "@vercel/analytics": "^2.0.1"
   },
   "scripts": {
-    "test": "node tests/auth.test.js"
+    "test": "node tests/auth.test.js && node tests/presence.test.js"
   }
 }

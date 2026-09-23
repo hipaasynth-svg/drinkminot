@@ -62,6 +62,13 @@ module.exports = async function (req, res) {
 
     if (b.action === 'update') {
       var f = b.fields || {};
+      // Rejected up front rather than dropped inside the mutator, so an owner who
+      // mistypes their staff PIN is told, instead of being shown a saved dashboard
+      // with the old PIN still live.
+      if (typeof f.staffPin === 'string' && f.staffPin.trim() && !L.validPinFormat(f.staffPin.trim())) {
+        L.json(res, 400, { error: 'bad_pin_format' });
+        return;
+      }
       await L.updateProfile(profile.id, function (r) {
         if (Array.isArray(f.picks)) r.picks = f.picks.slice(0, 3).map(function (x) { return String(x || ''); });
         if (typeof f.note === 'string') r.note = f.note;
@@ -81,6 +88,15 @@ module.exports = async function (req, res) {
           };
         }
         if (typeof f.password === 'string' && f.password.trim()) r.password = L.hashPw(f.password.trim());
+        // The 6-digit staff PIN that authorises a reward redemption from any staff
+        // member's own phone. Hashed like the password — never readable back, so an
+        // owner who forgets it sets a new one. '' clears it, which switches redemption
+        // off for this venue rather than leaving a guessable default.
+        if (typeof f.staffPin === 'string') {
+          var sp = f.staffPin.trim();
+          if (!sp) r.staffPin = null;
+          else if (L.validPinFormat(sp)) r.staffPin = L.hashPw(sp);
+        }
       });
       L.json(res, 200, { ok: true });
       return;

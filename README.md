@@ -138,6 +138,41 @@ can email `cody@drinkminot.com`.
   in `api/_lib.js` for local use; **treat any deployment without that variable set as an
   open admin console** and set it before going live.
 
+## Verified presence and single-use rewards
+
+Mirrors EatMinot. The three things that make "verified word-of-mouth" true are enforced on
+the server, not in the customer's browser:
+
+1. **A rating needs a signed tag** — `/?r=<id>&t=<sig>`, an HMAC of the venue id under
+   `DRINK_TAG_SECRET`. Deterministic, so a printed tag never goes stale. Copy each venue's
+   current URL from the admin console.
+2. **One rating per device per venue per 24h**, a Redis claim on the anonymous `dev_…`
+   token rather than a localStorage timestamp.
+3. **Punches are counted server-side** and rewards are server records. `/api/device` is
+   read-only; its old `put` action answers `410`.
+
+Rollout: tags already in venues carry no signature, so enforcement is **off** until
+`DRINK_REQUIRE_TAG_SIG=1`. Set `DRINK_TAG_SECRET`, redeploy, reprogram the tags from the
+signed links in admin (the banner there tells you which phase you're in), then set the flag.
+
+### Rewards
+
+A filled card mints a server-side coupon (code, venue, reward, expiry, `redeemedAt`).
+Customers can **Add reward to Google Wallet** — a separate Google *Offer* pass beside the
+punch card, whose QR opens `/redeem?c=<code>`.
+
+**Any staff member redeems from their own phone:** scan that QR (or open the "Staff:
+redeem" link on the customer's screen), see the venue and reward, enter the venue's
+**6-digit staff PIN**. No app, no venue login, no shared device — and because the PIN is
+the authorisation, a passer-by who scans the same QR cannot spend someone else's reward.
+On success the coupon is burned and the Wallet pass is PATCHed to `COMPLETED`, so it greys
+out in the customer's own Wallet.
+
+The owner sets and rotates the PIN in their dashboard; it is hashed and never readable
+back. **A venue with no PIN cannot redeem at all**, rather than falling back to something
+guessable. Failed PINs are rate-limited per coupon, per venue and per IP. Admin shows the
+per-venue **issued vs redeemed** line.
+
 ## Shared database (turn on cross-device sync)
 
 The app runs in two modes automatically:
@@ -175,12 +210,16 @@ Photos are stored under separate Redis keys and downscaled client-side to keep t
 
 ### API surface (`/api`)
 - `GET  /api/state` → public venues (+ `persistent` flag), no passwords
-- `POST /api/rate` `{id, stars, upvote}` → updates shared upvotes / verified ratings / stars
+- `POST /api/rate` `{id, t, deviceId, stars, upvote}` → verifies the tag signature and the
+  once-per-day claim, updates the shared counters, advances the server-held punch card,
+  and mints a coupon when it fills
+- `POST /api/coupon` `{action:'peek'|'redeem'|'mine'|'walletLink', …}` → staff-facing
+  lookup, single-use PIN redemption, a device's own rewards, the Add-to-Wallet link
 - `POST /api/owner` `{action:'login'|'update'|'photo', id, password, …}` → owner controls
 - `POST /api/admin` `{password, action, …}` → photos, Claimed/Paid flags, list, reset
 - `GET  /api/photo?id=` → a venue's photo
-- `POST /api/device` `{action:'get'|'put', deviceId, perRest}` → anonymous punch-card backup
-  (keyed only by the random `dev_…` token; sanitized to punch/coupon fields; no identity)
+- `POST /api/device` `{action:'get', deviceId}` → read-only punch state for that anonymous
+  token. `put` is gone (410): the server owns the count
 - `GET  /api/pass` → `{google, apple}` (which wallet buttons the server can issue)
 - `GET  /api/pass?provider=apple&dev=&venueId=&done=&total=` → the signed `.pkpass` file
 - `POST /api/pass` `{provider, dev, venueId, done, total, action?}` → an Add-to-Wallet save
@@ -278,6 +317,8 @@ Implemented with Stripe's REST API directly (no SDK): `api/checkout.js`,
 | `GOOGLE_WALLET_ISSUER_ID` | Google Wallet punch-card passes (with the SA key below) |
 | `GOOGLE_WALLET_SA_JSON_BASE64` | Google service-account JSON key, base64-encoded |
 | `APPLE_PASS_TYPE_ID` / `APPLE_TEAM_ID` / `APPLE_PASS_CERT_P12_BASE64` / `APPLE_PASS_CERT_PASSWORD` / `APPLE_WWDR_CERT_BASE64` | Apple Wallet passes (all five required; button hidden until then) |
+| `DRINK_TAG_SECRET` | Signed tag URLs (`/?r=<id>&t=<sig>`). **Set this** — without it, presence can't be proven or enforced. |
+| `DRINK_REQUIRE_TAG_SIG` | Set to `1` to **refuse** ratings without a valid tag signature. Reprogram every tag first. |
 | `MINOT_AGENT_URL` / `MINOT_AGENT_SERVICE_KEY` | AI Assistant (beta) — proxies `api/agent.js` to the self-hosted [`minot-agent`](https://github.com/hipaasynth-svg/hipaasynth-svg-minot-agent) service. Also requires an admin to flip a venue's `agentEnabled` flag in the admin console; without either, the feature stays invisible. |
 
 ### AI Assistant (beta)
