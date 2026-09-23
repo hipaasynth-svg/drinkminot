@@ -346,6 +346,45 @@ Implemented with Stripe's REST API directly (no SDK): `api/checkout.js`,
 3. Redeploy. Until `STRIPE_SECRET_KEY` is set, the upgrade button reports "billing not set
    up" and you can still grant Paid manually from the admin console.
 
+## Keeping the two sites in sync
+
+EatMinot and DrinkMinot are twins: near-identical code sold as one offer at one price. Every
+fix has to be ported twice, and when a port is missed nobody notices until a customer does.
+That has already happened three ways — the founding tier priced *above* standard while the
+pamphlets sold it as a discount, a one-pager selling "Founding Five" against a cap of 3, and
+`store.js` silently dropping an admin flag so a console toggle did nothing.
+
+`scripts/drift-guard.js` is the guard against a fourth. Run it locally:
+
+```sh
+npm test         # the regression suites
+npm run drift    # self-consistency + comparison against the twin checkout
+```
+
+A byte diff between the twins is useless (they legitimately differ by hundreds of lines), so
+the guard checks **invariants** instead:
+
+- the founding rate always **undercuts** standard — the invariant that actually broke
+- `api/checkout.js` carries no bare rate literal; both amounts come from the constants
+- `index.html`'s `PRICING` labels match `STANDARD_PRICE_CENTS` / `FOUNDING_PRICE_CENTS`, and
+  its trial label matches `FOUNDING_TRIAL_DAYS`
+- every rate stated in owner-facing HTML is one of the two current rates, and every
+  "Only N spots" / "Founding <Word>" claim matches `FOUNDING_LIMIT`
+- no owner-facing page promises a locked rate, since nothing in the code enforces one
+- every boolean flag `api/admin.js` `setFlag` accepts is actually forwarded by `store.js`
+  `adminSetFlag` — the no-op-toggle bug class
+- the four shared constants are **identical** in both repos, and the two copies of the guard
+  are byte-identical, so the guard cannot itself drift
+
+`.github/workflows/ci.yml` runs the suites and the guard on every PR. It clones the twin at
+the *same branch name* when one exists, falling back to `main`, so a change that correctly
+updates a shared invariant in both repos verifies against its counterpart instead of failing
+until one side merges.
+
+The banned-phrase check is matched literally and does not try to detect negation, so
+owner-facing copy should avoid "locked for a year" even to deny it. The reasoning for not
+promising a lock lives here and in `docs/AUDIT.md`, which the guard does not scan.
+
 ## Environment variables (all optional; features light up when present)
 
 | Var | Enables |

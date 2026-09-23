@@ -2,12 +2,13 @@
   "name": "drinkminot",
   "version": "1.0.0",
   "private": true,
-  "description": "DrinkMinot \u2014 verified local bar, bottle shop & coffee ratings for Minot, ND (twin of EatMinot)",
+  "description": "DrinkMinot — verified local bar, bottle shop & coffee ratings for Minot, ND (twin of EatMinot)",
   "license": "UNLICENSED",
   "dependencies": {
     "@vercel/analytics": "^2.0.1"
   },
   "scripts": {
-    "test": "node tests/auth.test.js && node tests/presence.test.js && node tests/founding.test.js"
+    "test": "node tests/auth.test.js && node tests/presence.test.js && node tests/founding.test.js",
+    "drift": "node scripts/drift-guard.js ../EatMinot.com"
   }
 }
