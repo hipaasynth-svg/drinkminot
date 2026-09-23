@@ -257,7 +257,7 @@
   function deviceRestore() {
     if (mode !== 'server') return Promise.resolve();
     var d = loadDevice();
-    return api('device', 'POST', { action: 'get', deviceId: d.deviceId }).then(function (res) {
+    return api('coupon', 'POST', { action: 'deviceGet', deviceId: d.deviceId }).then(function (res) {
       var serverPer = (res.ok && res.data && res.data.perRest) || {};
       var cur = loadDevice(), next = {};
       Object.keys(serverPer).forEach(function (id) {

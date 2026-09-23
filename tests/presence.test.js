@@ -19,7 +19,6 @@ var rate = require('../api/rate.js');
 var coupon = require('../api/coupon.js');
 var owner = require('../api/owner.js');
 var admin = require('../api/admin.js');
-var device = require('../api/device.js');
 var state = require('../api/state.js');
 var L = require('../api/_lib.js');
 
@@ -204,8 +203,16 @@ function newDev() { n++; return 'dev_t' + n + Date.now().toString(36); }
   ok(leaked.length === 0, 'GET /api/state leaks no staff PIN');
   ok(pub.body.restaurants[0].hasStaffPin !== undefined, 'but does say whether one is set');
 
-  r = await call(device, { action: 'put', deviceId: newDev(), perRest: { '1': { done: 99, total: 2 } } });
-  ok(r.status === 410 && r.body.error === 'server_owned', 'a client can no longer write its own punch count');
+  // The old /api/device 'put' let a browser declare its own punch count. That endpoint is
+  // gone entirely (its one read-only action moved into api/coupon.js), so there is no
+  // action anywhere that writes punch state except a real rating. Asserted by trying to
+  // smuggle a count through the read: it must be ignored.
+  var tamper = newDev();
+  r = await call(coupon, { action: 'deviceGet', deviceId: tamper, perRest: { '1': { done: 99, total: 2 } } });
+  ok(r.status === 200 && Object.keys(r.body.perRest).length === 0,
+     'a client cannot write its own punch count — the read ignores any payload');
+  var afterTamper = await L.getDevice(tamper);
+  ok(Object.keys(afterTamper.perRest).length === 0, 'and nothing was persisted for it');
 
   var al = await call(admin, { password: ADMIN, action: 'list' });
   var row = al.body.restaurants.filter(function (x) { return x.id === VENUE; })[0];

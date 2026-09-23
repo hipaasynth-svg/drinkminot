@@ -6,6 +6,7 @@ var W = require('./_wallet');
 //   { action:'peek',   code }              -> what staff are about to honour (no PIN yet)
 //   { action:'redeem', code, pin }         -> burns it, once
 //   { action:'mine',   deviceId }          -> this device's own coupons (cache-wipe recovery)
+//   { action:'deviceGet', deviceId }      -> this device's punch state (read-only)
 //
 // Redemption is deliberately usable from ANY staff member's own phone with no venue
 // login and no shared device: they scan the QR on the customer's coupon, which carries
@@ -23,6 +24,19 @@ module.exports = async function (req, res) {
   try {
     var b = await L.readBody(req);
     var ip = L.clientIp(req);
+
+    // ---- this device's punch state ----
+    // Folded in from the former api/device.js. Vercel's Hobby plan caps a deployment at
+    // 12 Serverless Functions, and a separate file for one read-only action spent one of
+    // them; these two endpoints were the same subject anyway — what this anonymous device
+    // has earned. Read-only: nothing here writes punch state, which api/rate.js owns.
+    if (b.action === 'deviceGet') {
+      var pd = String(b.deviceId || '');
+      if (!L.validDeviceToken(pd)) { L.json(res, 400, { error: 'bad_device' }); return; }
+      var pdev = await L.getDevice(pd);
+      L.json(res, 200, { ok: true, perRest: pdev.perRest });
+      return;
+    }
 
     // ---- a device asking for its own coupons back ----
     if (b.action === 'mine') {

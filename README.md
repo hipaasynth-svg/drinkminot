@@ -218,8 +218,10 @@ Photos are stored under separate Redis keys and downscaled client-side to keep t
 - `POST /api/owner` `{action:'login'|'update'|'photo', id, password, …}` → owner controls
 - `POST /api/admin` `{password, action, …}` → photos, Claimed/Paid flags, list, reset
 - `GET  /api/photo?id=` → a venue's photo
-- `POST /api/device` `{action:'get', deviceId}` → read-only punch state for that anonymous
-  token. `put` is gone (410): the server owns the count
+- `api/device.js` is gone. Its one read-only action is now
+  `POST /api/coupon {action:'deviceGet', deviceId}`, because Vercel's Hobby plan caps a
+  deployment at **12 Serverless Functions** and a whole file for one read spent one of
+  them. Nothing writes punch state except a real rating.
 - `GET  /api/pass` → `{google, apple}` (which wallet buttons the server can issue)
 - `GET  /api/pass?provider=apple&dev=&venueId=&done=&total=` → the signed `.pkpass` file
 - `POST /api/pass` `{provider, dev, venueId, done, total, action?}` → an Add-to-Wallet save
