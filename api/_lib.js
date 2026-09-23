@@ -135,6 +135,22 @@ function avgRating(v) { var c = v && v.ratingCount ? v.ratingCount : 0; return c
 var MIN_PUNCHES = 2, MAX_PUNCHES = 5, DEFAULT_PUNCHES = 3;
 function clampPunches(n) { n = parseInt(n, 10); return (n >= MIN_PUNCHES && n <= MAX_PUNCHES) ? n : DEFAULT_PUNCHES; }
 
+// The standard monthly rate every claimed venue pays. Kept here, not inline in
+// checkout.js, so exactly one line in this repo decides what a venue is charged.
+var STANDARD_PRICE_CENTS = 7900;
+// Founding Three: exactly 3 venues on this site, ever, get a 10-week (70-day) free trial
+// and then the founding rate below — cheaper than standard, which is the whole point of
+// the offer — see checkout.js. Both the admin grant (only 3 venues may hold foundingOffer
+// at once) and checkout itself are capped against this same number so neither path can
+// hand out a 4th slot. These mirror EatMinot's constants deliberately: the two sites sell
+// the same offer at the same price, and the marketing for both says so.
+var FOUNDING_LIMIT = 3, FOUNDING_TRIAL_DAYS = 70, FOUNDING_PRICE_CENTS = 5900;
+// Counts venues that already have a locked-in founding slot (paid) plus ones an admin has
+// granted the offer to but who haven't checked out yet — both consume one of the 3 spots.
+function countFoundingSlots(list) {
+  return list.filter(function (r) { return r.founding || r.foundingOffer; }).length;
+}
+
 /* ---------- password hashing (salted SHA-256, no plaintext at rest) ---------- */
 function hashPw(pw) {
   var salt = crypto.randomBytes(9).toString('hex');
@@ -198,6 +214,15 @@ function seedProfile(id) {
     // AI Assistant (beta) — always starts off; only a super admin can turn it on per venue
     // (see api/admin.js setFlag), independent of claimed/paid. Not a Stripe-gated tier yet.
     agentEnabled: false,
+    // Founding Three: admin grants foundingOffer to at most 3 venues (see api/admin.js
+    // setFlag), which is what makes api/checkout.js give a 10-week trial and then the
+    // founding $59/mo instead of the standard $79/mo. founding flips true once that
+    // checkout actually completes — it's the permanent record of "this venue used a
+    // founding slot" and keeps their $59 rate even if foundingOffer is later cleared.
+    // foundingLockUntil is an internal record only: one year from signup. Nothing reads
+    // it, and no owner-facing copy promises a locked rate (see README). Do not put that
+    // promise back into the marketing without first adding a guard that enforces it.
+    foundingOffer: false, founding: false, foundingLockUntil: null,
     // No password until the real owner sets one through the claim flow (see api/owner.js).
     // A null password cannot be logged into at all — there is nothing to guess.
     password: null,
@@ -281,6 +306,10 @@ function normalizeProfile(p) {
   // Profiles saved before this beta existed default OFF regardless of claimed/paid —
   // an admin must explicitly opt each venue in while it's being tested.
   if (typeof p.agentEnabled !== 'boolean') p.agentEnabled = false;
+  // Profiles saved before Founding Three existed hold no slot and never had the offer.
+  if (typeof p.foundingOffer !== 'boolean') p.foundingOffer = false;
+  if (typeof p.founding !== 'boolean') p.founding = false;
+  if (typeof p.foundingLockUntil !== 'string') p.foundingLockUntil = null;
   // Backfill the static list attributes for profiles saved before these fields existed.
   var row = RAW[p.id - 1];
   if (row) {
@@ -718,6 +747,9 @@ module.exports = {
   kvGet: kvGet, kvSet: kvSet, kvDel: kvDel,
   getProfile: getProfile, saveProfile: saveProfile, updateProfile: updateProfile,
   clampPunches: clampPunches, avgRating: avgRating,
+  FOUNDING_LIMIT: FOUNDING_LIMIT, FOUNDING_TRIAL_DAYS: FOUNDING_TRIAL_DAYS,
+  FOUNDING_PRICE_CENTS: FOUNDING_PRICE_CENTS, STANDARD_PRICE_CENTS: STANDARD_PRICE_CENTS,
+  countFoundingSlots: countFoundingSlots,
   getVotes: getVotes, incrementVotes: incrementVotes,
   getRestaurant: getRestaurant, getAllRestaurants: getAllRestaurants, resetAll: resetAll,
   publicView: publicView,

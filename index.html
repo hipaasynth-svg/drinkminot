@@ -256,7 +256,7 @@
     <div class="scroll">
       <div class="note">Default password is your venue name (letters only) + <b>26</b>, e.g. <b>capribar26</b>. Change it once you're in.</div>
       <label class="field"><span>Venue</span><select id="loginPick"></select></label>
-      <label class="field"><span>Password</span><input type="password" id="loginPw" placeholder="name + 26" autocomplete="off"></label>
+      <label class="field"><span>Password</span><input type="password" id="loginPw" placeholder="Password" autocomplete="off"></label>
       <button class="btn accent" id="loginBtn">Log in</button>
       <div id="loginErr" style="color:#F0866B;font-size:13px;font-weight:700;display:none">Wrong password.</div>
       <div class="note">Need your password? Email <a href="mailto:cody@drinkminot.com">cody@drinkminot.com</a>.</div>
@@ -875,11 +875,28 @@
     });
   }
   var ownerPw='';
+  // The only place this page writes a price. These two must match STANDARD_PRICE_CENTS and
+  // FOUNDING_PRICE_CENTS in api/_lib.js, which is what Stripe is actually charged — if you
+  // change a rate, change it there and here, and nowhere else in this file.
+  var PRICING = { standard: '$79/mo', founding: '$59/mo', trial: '10 weeks free' };
+  // Mirrors the founding-vs-standard split in api/checkout.js: once a venue is r.founding it
+  // keeps the cheaper founding rate permanently; r.foundingOffer means an admin granted the
+  // offer but the venue hasn't checked out yet, so it still shows the standard rate until
+  // they redeem it. Note we deliberately don't tell the owner their rate is "locked" for any
+  // period — nothing in the code enforces that, so nothing should promise it.
+  function tierLabel(r){
+    if (r.paid) return r.founding ? 'Claimed · Paid · ' + PRICING.founding + ' (Founding)'
+                                  : 'Claimed · Paid · ' + PRICING.standard;
+    if (r.foundingOffer) return 'Claimed (free) — Founding Three: ' + PRICING.trial + ', then ' + PRICING.founding;
+    return 'Claimed (free) — upgrade to unlock photo & billboard';
+  }
+  function upgradePriceText(r){ return r.foundingOffer ? PRICING.trial + ', then ' + PRICING.founding : PRICING.standard; }
+  function upgradeButtonText(r){ return r.foundingOffer ? 'Start free trial — then ' + PRICING.founding : 'Upgrade — ' + PRICING.standard; }
   function openDash(id){
     var r=S.get(id); if(!r) return;
     ownerPw=$('#loginPw').value || ownerPw;
     $('#dashName').textContent=r.name;
-    $('#dashTier').textContent=(r.paid?'Claimed · Paid · $59/mo':'Claimed (free) — upgrade to unlock photo & billboard');
+    $('#dashTier').textContent=tierLabel(r);
     renderDash(r); showScreen('dash');
   }
   function renderDash(r){
@@ -888,14 +905,14 @@
       '<div id="ownerPhotoPrev" style="height:120px;border-radius:12px;background:#2A2448 center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:#8A83A6;font-weight:700;font-size:13px">'+(r.hasPhoto?'':'No photo yet')+'</div>'+
       '<input type="file" accept="image/*" id="ownerPhoto" '+(paid?'':'disabled')+'></div>';
     var photoBlock = paid ? photoInner :
-      '<div class="lock">'+photoInner+'<div class="veil"><div class="pill">$59/mo</div><div style="font-weight:800;font-size:13px">Upgrade to change your photo</div><div class="lbl" style="text-transform:none">Also unlocks the House Picks billboard</div><button class="btn accent" id="ownerUpgrade" style="padding:10px 16px">Upgrade — $59/mo</button></div></div>';
+      '<div class="lock">'+photoInner+'<div class="veil"><div class="pill">'+upgradePriceText(r)+'</div><div style="font-weight:800;font-size:13px">Upgrade to change your photo</div><div class="lbl" style="text-transform:none">Also unlocks the House Picks billboard</div><button class="btn accent" id="ownerUpgrade" style="padding:10px 16px">'+upgradeButtonText(r)+'</button></div></div>';
 
     host.innerHTML =
       '<div class="field"><span>Your public page</span><div style="display:flex;gap:8px;align-items:center"><input type="text" id="ownerUrl" readonly value="'+esc(publicUrl(r.id))+'" style="flex:1"><button class="btn ghost" id="ownerCopy" style="padding:8px 12px;white-space:nowrap">Copy</button></div><a class="ownerlink" style="padding-left:0" href="'+esc(publicUrl(r.id))+'" target="_blank" rel="noopener">Open my page →</a></div>'+
       '<div class="note">'+(S.isServer()
         ? 'Changes save to the shared database and appear for every customer.'
         : 'Changes save on <b>this browser only</b> until you attach storage in Vercel (see README) — then it syncs to all devices.')+
-        ' Upgrading opens secure <b>Stripe</b> checkout for the $59/mo tier.</div>'+
+        ' Upgrading opens secure <b>Stripe</b> checkout for the '+upgradePriceText(r)+' tier.</div>'+
       photoBlock+
       sec('House Picks billboard'+(paid?'':' (paid)'), (paid?'':'<div class="lbl" style="text-transform:none;margin-bottom:6px">Upgrade to publish these on your card.</div>')+pick(0,r,paid)+pick(1,r,paid)+pick(2,r,paid))+
       sec('Happy hour', happyBlock(r))+

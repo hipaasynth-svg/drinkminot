@@ -103,8 +103,9 @@ Open `index.html` for the customer experience; `admin.html` for the operator con
 - **Owner dashboard** (password-gated) — House Picks billboard (top 3 picks), happy-hour
   selector, punch-card reward + punches-needed (2–5), the exclusive Most Wanted offer, note,
   website, password change. A "forgot password" line points owners to `cody@drinkminot.com`.
-- **Paid gate** — changing the photo and publishing the billboard require the $59/mo tier;
-  free claimed owners can edit the rest.
+- **Paid gate** — changing the photo and publishing the billboard require a paid tier
+  ($79/mo standard, or $59/mo for a Founding Three venue); free claimed owners can edit
+  the rest.
 - **Admin console** — upload a photo for any venue, toggle Claimed/Paid, add to **Minot's
   Most Wanted** (Featured), **hide/show a venue** (pulls it from the public list, tag page,
   Most Wanted and rating while keeping it in the admin panel to restore), hand out a listing's
@@ -282,11 +283,40 @@ For an unclaimed listing it shows that venue's **setup code**; for a claimed one
 only whether a password has been set, with a **Generate new password** action that returns
 a fresh random password once.
 
-## Billing — $59/mo Claimed tier (Stripe)
+## Billing — two tiers (Stripe)
 
-The "Upgrade — $59/mo" button opens **Stripe Checkout** (subscription). On return, the app
-confirms the session and flips the listing to **Paid** (unlocking photo changes + the House
-Picks billboard). A webhook keeps status in sync on cancellation.
+| Tier | Price | Trial | How a venue gets it |
+|------|-------|-------|---------------------|
+| **Standard** | **$79/mo** | none — billed immediately | Any claimed owner clicks "Upgrade — $79/mo" |
+| **Founding Three** | **$59/mo** | **10 weeks free**, then $59/mo | An admin grants it in the console — 3 slots on this site, ever |
+
+Both amounts live in exactly one place: `STANDARD_PRICE_CENTS` and `FOUNDING_PRICE_CENTS`
+in `api/_lib.js`. That is what Stripe is actually charged. The `PRICING` object near the top
+of `index.html`'s owner-dashboard script holds the matching owner-facing *labels* — change a
+rate in both, and nowhere else. `tests/founding.test.js` asserts the table above and fails
+if the founding rate ever stops being cheaper than standard, which is the bug it exists to
+prevent: the offer shipped priced *above* standard and stayed that way while it was being
+sold.
+
+The upgrade button opens **Stripe Checkout** (subscription). On return, the app confirms the
+session and flips the listing to **Paid** (unlocking photo changes + the House Picks
+billboard). A webhook keeps status in sync on cancellation.
+
+### Founding Three
+Exactly **3 venues on this site** can ever hold the offer. An admin grants it with the
+**Founding** chip in the console. The cap is enforced twice — at grant time
+(`api/admin.js` `setFlag`, which returns `409 founding_full`) and again at checkout
+(`api/checkout.js`) — so two granted venues checking out at the same moment cannot both
+take the last slot.
+
+Only the first checkout that actually redeems the offer gets the free trial. Once it
+completes, `founding` is set permanently, so a venue that later cancels and resubscribes
+keeps the $59 rate but does **not** get a second trial.
+
+**On "locked for a year":** `foundingLockUntil` is written (one year out) but **nothing
+reads it**, and no owner-facing copy promises a locked rate — deliberately. If you want to
+advertise a locked rate, add the guard that enforces it *first*. A pricing promise no code
+can keep is a liability, not a feature.
 
 Implemented with Stripe's REST API directly (no SDK): `api/checkout.js`,
 `api/upgrade-confirm.js`, `api/stripe-webhook.js`.
@@ -297,8 +327,18 @@ Implemented with Stripe's REST API directly (no SDK): `api/checkout.js`,
    - `STRIPE_WEBHOOK_SECRET` — from the webhook you create in step 2 (optional but
      recommended; without it, upgrades still work via return-confirmation, but automatic
      downgrade-on-cancel won't).
-   - `STRIPE_PRICE_ID` — *optional*. If unset, checkout creates the $59/mo line inline; set
-     it to a fixed Price ID if you'd rather manage the product in Stripe.
+   - `STRIPE_PRICE_ID` — *optional*, **standard tier only**. If unset, checkout creates the
+     $79/mo line inline; set it to a fixed Price ID if you'd rather manage the product in
+     Stripe. Founding checkouts ignore it — they always need their own dynamic price so the
+     10-week trial can be attached.
+
+     > ⚠️ **If this is set, it overrides `STANDARD_PRICE_CENTS` and decides what the
+     > standard tier is actually charged.** The amount lives in Stripe, not in this repo, so
+     > nothing here — not `tests/founding.test.js`, not the constants — can detect a
+     > mismatch. A Price object created back when standard was $59 will keep charging $59
+     > while every document, pamphlet and label says $79. **Check this variable in Vercel
+     > before selling at the new price, or leave it unset** so the inline
+     > `STANDARD_PRICE_CENTS` is the single source of truth.
 2. In Stripe → Developers → **Webhooks**, add an endpoint
    `https://drinkminot.com/api/stripe-webhook` for events `checkout.session.completed`,
    `customer.subscription.deleted`, `customer.subscription.updated`. Copy its signing secret
@@ -313,9 +353,9 @@ Implemented with Stripe's REST API directly (no SDK): `api/checkout.js`,
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Shared database (auto-added by Vercel's Upstash Redis) |
 | `DRINK_SESSION_SECRET` | Unforgeable owner session tokens |
 | `DRINK_ADMIN_PASSWORD` | The admin-console password. **Set this before going live.** |
-| `STRIPE_SECRET_KEY` | Live $59/mo Stripe checkout |
+| `STRIPE_SECRET_KEY` | Live Stripe checkout (both tiers) |
 | `STRIPE_WEBHOOK_SECRET` | Auto status sync (cancellations) |
-| `STRIPE_PRICE_ID` | Use a fixed Stripe Price instead of the inline $59/mo |
+| `STRIPE_PRICE_ID` | Use a fixed Stripe Price for the **standard** tier instead of the inline $79/mo (founding checkouts always use the dynamic price + trial) |
 | `GOOGLE_WALLET_ISSUER_ID` | Google Wallet punch-card passes (with the SA key below) |
 | `GOOGLE_WALLET_SA_JSON_BASE64` | Google service-account JSON key, base64-encoded |
 | `APPLE_PASS_TYPE_ID` / `APPLE_TEAM_ID` / `APPLE_PASS_CERT_P12_BASE64` / `APPLE_PASS_CERT_PASSWORD` / `APPLE_WWDR_CERT_BASE64` | Apple Wallet passes (all five required; button hidden until then) |
