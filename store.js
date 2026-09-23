@@ -134,7 +134,17 @@
   function punchesFor(r) { return clampPunches(r && r.punchesNeeded); }
 
   function slug(n) { return String(n).toLowerCase().replace(/[^a-z0-9]/g, ''); }
-  function defaultPassword(n) { return slug(n) + '26'; }
+  /* Local (no-database) mode mirrors the server: there is no formula that turns a venue
+     name into a credential. A listing has no password until it is claimed with its own
+     random claim code — see api/_lib.js for the same reasoning on the server. */
+  var CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  function randomCode(len) {
+    len = len || 8;
+    var out = '';
+    for (var i = 0; i < len; i++) out += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
+    return out;
+  }
+  function normalizeCode(c) { return String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
   function fmtNum(n) {
     n = Math.round(n || 0);
     if (n >= 1000) { var k = n / 1000; return (n >= 10000 ? Math.round(k) : Math.round(k * 10) / 10).toString().replace(/\.0$/, '') + 'k'; }
@@ -146,7 +156,8 @@
       return {
         id: id, name: name, address: row[1], hours: row[2],
         category: row[3], over21: !!row[4], alsoOnEat: !!row[5],
-        claimed: claimed, paid: claimed, featured: claimed, hidden: false, rewardsOn: claimed, password: defaultPassword(name),
+        claimed: claimed, paid: claimed, featured: claimed, hidden: false, rewardsOn: claimed,
+        password: null, claimCode: randomCode(),
         photo: null, hasPhoto: false,
         pickPhotos: [null, null, null], hasPickPhoto: [false, false, false],
         upvotes: 0, ratingSum: 0, ratingCount: 0, totalRatings: 0, rating: 0,
@@ -235,40 +246,70 @@
      The card lives in localStorage as before; in server mode we also mirror it to the
      backend under the device's random token, so a reload or a wiped localStorage can
      restore it. No identity is ever attached — the token is the only key. */
-  function deviceBackup() {
-    if (mode !== 'server') return;
-    var d = loadDevice();
-    api('device', 'POST', { action: 'put', deviceId: d.deviceId, perRest: d.perRest }).catch(function () {});
-  }
-  // Merge one venue's local + backup record without losing progress or a live coupon.
-  function mergeRec(a, b) {
-    if (!a) return b; if (!b) return a;
-    var newer = (b.ratedAt || 0) >= (a.ratedAt || 0) ? b : a, older = newer === b ? a : b;
-    var m = { done: newer.done || 0, total: newer.total || older.total || DEFAULT_PUNCHES, ratedAt: newer.ratedAt || 0, tapAt: Math.max(a.tapAt || 0, b.tapAt || 0) };
-    var coup = newer.coupon || null;
-    if ((!coup || (coup.expiresAt || 0) < Date.now()) && older.coupon && (older.coupon.expiresAt || 0) > Date.now()) coup = older.coupon;
-    m.coupon = coup;
-    return m;
-  }
+  function deviceBackup() { /* server-owned: nothing to upload */ }
   // On load (server mode): pull the backup, merge it into this device's local state,
   // then push the union back so the server always holds the latest.
+  /* Pull server truth into the local render cache: the punch counts, and this device's
+     outstanding coupons. The server's copy wins outright — there is no merge any more,
+     because a merge would let a wiped-and-edited localStorage reintroduce progress the
+     server never granted. A wiped cache is restored from the server, which is the point
+     of the anonymous token; a tampered cache is simply overwritten. */
   function deviceRestore() {
     if (mode !== 'server') return Promise.resolve();
     var d = loadDevice();
-    return api('device', 'POST', { action: 'get', deviceId: d.deviceId }).then(function (res) {
-      var serverPer = (res.ok && res.data && res.data.perRest) || null;
-      if (!serverPer) return;
-      var cur = loadDevice(), changed = false, ids = {};
-      Object.keys(cur.perRest || {}).forEach(function (k) { ids[k] = 1; });
-      Object.keys(serverPer).forEach(function (k) { ids[k] = 1; });
-      Object.keys(ids).forEach(function (id) {
-        var merged = mergeRec(cur.perRest[id], serverPer[id]);
-        if (JSON.stringify(merged) !== JSON.stringify(cur.perRest[id])) changed = true;
-        cur.perRest[id] = merged;
+    return api('coupon', 'POST', { action: 'deviceGet', deviceId: d.deviceId }).then(function (res) {
+      var serverPer = (res.ok && res.data && res.data.perRest) || {};
+      var cur = loadDevice(), next = {};
+      Object.keys(serverPer).forEach(function (id) {
+        var sv = serverPer[id] || {};
+        next[id] = {
+          done: parseInt(sv.done, 10) || 0,
+          total: parseInt(sv.total, 10) || DEFAULT_PUNCHES,
+          ratedAt: parseInt(sv.ratedAt, 10) || 0,
+          // tapAt is purely a local UX timer for the "Rate now" pill, so it is the one
+          // field the server has no opinion about and the local value is kept.
+          tapAt: (cur.perRest[id] && cur.perRest[id].tapAt) || 0,
+          coupon: null
+        };
       });
-      if (changed) saveDevice(cur);
-      deviceBackup();
+      Object.keys(cur.perRest || {}).forEach(function (id) {
+        if (!next[id] && cur.perRest[id] && cur.perRest[id].tapAt) {
+          next[id] = { done: 0, total: DEFAULT_PUNCHES, ratedAt: 0, tapAt: cur.perRest[id].tapAt, coupon: null };
+        }
+      });
+      cur.perRest = next; saveDevice(cur);
+      return couponsRestore();
     }).catch(function () {});
+  }
+  /* This device's live coupons, from the server. A venue may now hold more than one —
+     filling a second card used to overwrite an unredeemed reward, because the client
+     kept a single coupon slot per venue. */
+  function couponsRestore() {
+    if (mode !== 'server') return Promise.resolve();
+    var d = loadDevice();
+    return api('coupon', 'POST', { action: 'mine', deviceId: d.deviceId }).then(function (res) {
+      if (!res.ok || !res.data || !Array.isArray(res.data.coupons)) return;
+      var cur = loadDevice();
+      res.data.coupons.forEach(function (c) {
+        var id = c.venueId;
+        if (!cur.perRest[id]) cur.perRest[id] = { done: 0, total: DEFAULT_PUNCHES, ratedAt: 0, tapAt: 0, coupon: null };
+        var existing = cur.perRest[id].coupon;
+        // Show the one expiring soonest, so nothing is left to quietly lapse.
+        if (!existing || (c.expiresAt || 0) < (existing.expiresAt || 0)) cur.perRest[id].coupon = c;
+        if (!cur.perRest[id].coupons) cur.perRest[id].coupons = [];
+        cur.perRest[id].coupons.push(c);
+      });
+      saveDevice(cur);
+    }).catch(function () {});
+  }
+  /* Ask the server to create this reward's Google Wallet pass and return its
+     Add-to-Wallet link. Resolves to null when wallet isn't configured. */
+  function couponWalletLink(code) {
+    if (mode !== 'server') return Promise.resolve(null);
+    var dv = loadDevice();
+    return api('coupon', 'POST', { action: 'walletLink', code: code, deviceId: dv.deviceId })
+      .then(function (res) { return (res.ok && res.data && res.data.saveUrl) || null; })
+      .catch(function () { return null; });
   }
 
   /* ---------- local-mode persistence ---------- */
@@ -376,15 +417,34 @@
   function clearPickPhoto(id, i) { delete pickPhotoCache[id + ':' + i]; }
 
   /* ---------- rating (public, shared) + punch (per-device) ---------- */
-  function rate(id, stars, upvote) {
+  /* ---------- rating ----------
+     In server mode the punch count and any coupon come back FROM the server and are
+     cached locally for rendering — they are no longer computed here. The old code called
+     the local punch() after a successful rate, which meant the card, and therefore the
+     reward, was whatever this browser said it was.
+
+     `tagSig` is the `t` from the tag URL. The server decides what a missing one means
+     (accepted-but-unverified during the tag migration, refused once
+     DRINK_REQUIRE_TAG_SIG is on), so nothing here needs to know which phase we are in.
+     The local rate-limit check stays as a UX courtesy; the real limit is server-side. */
+  function rate(id, stars, upvote, tagSig) {
     if (ratedRecently(id)) return Promise.resolve({ ok: false, reason: 'rate_limited' });
     var r = get(id);
     if (mode === 'server') {
-      return api('rate', 'POST', { id: id, stars: stars, upvote: upvote }).then(function (res) {
+      var dev = loadDevice();
+      return api('rate', 'POST', { id: id, stars: stars, upvote: upvote, t: tagSig || '', deviceId: dev.deviceId }).then(function (res) {
         if (!res.ok) return { ok: false, reason: (res.data && res.data.error) || 'error' };
         var c = get(id); if (c) { c.upvotes = res.data.upvotes; c.totalRatings = res.data.totalRatings; c.rating = res.data.rating; }
-        var rec = punch(id, r ? r.couponValidDays : 14, r ? r.reward : '', punchesFor(r), !!(r && r.rewardsOn));
-        return { ok: true, record: rec };
+        // Cache the server's answer so the card and coupon render without another round
+        // trip. This is a copy of server state, not a source of it.
+        var d = loadDevice();
+        var rec = d.perRest[id] || {};
+        rec.ratedAt = Date.now();
+        if (res.data.punch) { rec.done = res.data.punch.done; rec.total = res.data.punch.total; }
+        if (res.data.coupon) rec.coupon = res.data.coupon;
+        d.perRest[id] = rec; saveDevice(d);
+        if (r && r.rewardsOn) walletSync(id);
+        return { ok: true, record: rec, coupon: res.data.coupon || null, tagVerified: !!res.data.tagVerified };
       });
     }
     // local
@@ -399,23 +459,32 @@
   /* ---------- owner ---------- */
   var ownerTok = {}; // id -> session token
   function ownerLogin(id, pw) {
-    if (mode === 'server') return api('owner', 'POST', { action: 'login', id: id, password: pw }).then(function (res) { if (res.ok && res.data.token) ownerTok[id] = res.data.token; return res.ok ? { ok: true, data: res.data } : { ok: false }; });
-    var lr = localFind(loadLocal(), id); return Promise.resolve(lr && pw === lr.password ? { ok: true, data: { id: lr.id, name: lr.name, paid: lr.paid } } : { ok: false });
+    if (mode === 'server') return api('owner', 'POST', { action: 'login', id: id, password: pw }).then(function (res) { if (res.ok && res.data.token) ownerTok[id] = res.data.token; return res.ok ? { ok: true, data: res.data } : { ok: false, reason: res.data && res.data.error }; });
+    // Same gates as api/owner.js: an unclaimed listing, or one with no password set, can
+    // never be logged into — there is nothing to guess.
+    var lr = localFind(loadLocal(), id);
+    if (!lr) return Promise.resolve({ ok: false, reason: 'not_found' });
+    if (!lr.claimed || !lr.password) return Promise.resolve({ ok: false, reason: 'not_claimed' });
+    return Promise.resolve(pw === lr.password ? { ok: true, data: { id: lr.id, name: lr.name, paid: lr.paid } } : { ok: false });
   }
-  // First-run claim: open an unclaimed venue once with no password, then set one.
+  // First-run claim: an unclaimed venue is claimed by presenting its own random claim
+  // code (handed over in person with the tags), then setting a password.
   // Server enforces one-time via the claimed flag; local mirrors it.
-  function ownerClaim(id, newPw) {
+  function ownerClaim(id, newPw, code) {
     id = parseInt(id, 10);
-    if (mode === 'server') return api('owner', 'POST', { action: 'claim', id: id, password: newPw }).then(function (res) { if (res.ok && res.data && res.data.token) ownerTok[id] = res.data.token; return { ok: !!res.ok, reason: res.data && res.data.error, data: res.data }; });
+    if (mode === 'server') return api('owner', 'POST', { action: 'claim', id: id, password: newPw, code: code }).then(function (res) { if (res.ok && res.data && res.data.token) ownerTok[id] = res.data.token; return { ok: !!res.ok, reason: res.data && res.data.error, data: res.data }; });
     var d = loadLocal(), lr = localFind(d, id);
     if (!lr) return Promise.resolve({ ok: false, reason: 'not_found' });
     if (lr.claimed) return Promise.resolve({ ok: false, reason: 'already_claimed' });
+    if (normalizeCode(lr.claimCode) !== normalizeCode(code)) return Promise.resolve({ ok: false, reason: 'bad_code' });
     lr.password = newPw; lr.claimed = true;
     saveLocal(d); cache = decorateList(d.restaurants);
     return Promise.resolve({ ok: true });
   }
   function ownerUpdate(id, pw, fields) {
-    if (mode === 'server') return api('owner', 'POST', { action: 'update', id: id, token: ownerTok[id], password: pw, fields: fields }).then(function (res) { return { ok: res.ok }; }).then(function (r) { return refresh().then(function () { return r; }); });
+    // The reason is carried through so the dashboard can tell a rejected staff PIN from
+    // a generic failure, rather than reporting "Save failed" for a fixable typo.
+    if (mode === 'server') return api('owner', 'POST', { action: 'update', id: id, token: ownerTok[id], password: pw, fields: fields }).then(function (res) { return { ok: res.ok, reason: res.data && res.data.error }; }).then(function (r) { return refresh().then(function () { return r; }); });
     var d = loadLocal(), lr = localFind(d, id);
     if (!lr || pw !== lr.password) return Promise.resolve({ ok: false });
     if (Array.isArray(fields.picks)) lr.picks = fields.picks.slice(0, 3);
@@ -426,7 +495,11 @@
     if (fields.punchesNeeded != null) lr.punchesNeeded = clampPunches(fields.punchesNeeded);
     if (fields.couponValidDays != null) lr.couponValidDays = Math.max(1, parseInt(fields.couponValidDays, 10) || 1);
     if (fields.happyHour) lr.happyHour = fields.happyHour;
+    if (typeof fields.staffPin === 'string' && fields.staffPin && !/^[0-9]{6}$/.test(fields.staffPin)) return Promise.resolve({ ok: false, reason: 'bad_pin_format' });
     if (typeof fields.password === 'string' && fields.password.trim()) lr.password = fields.password.trim();
+    // Local mode stores it in the clear because there is no server to hash it — the
+    // no-database demo path only. hasStaffPin is what the dashboard reads.
+    if (typeof fields.staffPin === 'string') { lr.staffPin = fields.staffPin || null; lr.hasStaffPin = !!fields.staffPin; }
     var ok = saveLocal(d); cache = decorateList(d.restaurants);
     return Promise.resolve({ ok: ok });
   }
@@ -476,9 +549,16 @@
   /* ---------- admin ---------- */
   function checkAdminLocal(pw) { var s; try { s = global.localStorage.getItem(AKEY); } catch (e) { s = null; } return pw === (s || DEFAULT_ADMIN); }
   function adminList(pw) {
-    if (mode === 'server') return api('admin', 'POST', { password: pw, action: 'list' }).then(function (res) { return res.ok ? { ok: true, restaurants: res.data.restaurants } : { ok: false }; });
+    if (mode === 'server') return api('admin', 'POST', { password: pw, action: 'list' }).then(function (res) { return res.ok ? { ok: true, restaurants: res.data.restaurants, tagSigAvailable: !!res.data.tagSigAvailable, tagSigEnforced: !!res.data.tagSigEnforced } : { ok: false }; });
     if (!checkAdminLocal(pw)) return Promise.resolve({ ok: false });
     return Promise.resolve({ ok: true, restaurants: loadLocal().restaurants });
+  }
+  // Issued vs redeemed per venue — derived from the coupon records, so it cannot drift.
+  function adminCouponStats(pw) {
+    if (mode !== 'server') return Promise.resolve({ ok: false, reason: 'local' });
+    return api('admin', 'POST', { password: pw, action: 'couponStats' }).then(function (res) {
+      return res.ok ? { ok: true, stats: res.data.stats, total: res.data.total } : { ok: false };
+    });
   }
   function adminPhoto(pw, id, dataUrl) {
     clearPhoto(id);
@@ -525,11 +605,23 @@
     if (typeof flags.rewardsOn === 'boolean') { lr.rewardsOn = flags.rewardsOn; }
     saveLocal(d); cache = decorateList(d.restaurants); return Promise.resolve({ ok: true });
   }
+  // Issues a fresh setup code for an unclaimed listing (admin-only).
+  function adminNewClaimCode(pw, id) {
+    id = parseInt(id, 10);
+    if (mode === 'server') return api('admin', 'POST', { password: pw, action: 'newClaimCode', id: id }).then(function (res) { return { ok: res.ok, claimCode: res.data && res.data.claimCode, reason: res.data && res.data.error }; });
+    var d0 = loadLocal(), lr0 = localFind(d0, id);
+    if (!lr0) return Promise.resolve({ ok: false, reason: 'not_found' });
+    if (lr0.claimed) return Promise.resolve({ ok: false, reason: 'already_claimed' });
+    lr0.claimCode = randomCode(); saveLocal(d0); cache = decorateList(d0.restaurants);
+    return Promise.resolve({ ok: true, claimCode: lr0.claimCode });
+  }
   function adminResetPassword(pw, id) {
-    if (mode === 'server') return api('admin', 'POST', { password: pw, action: 'resetPassword', id: id }).then(function (res) { return { ok: res.ok, defaultPassword: res.data && res.data.defaultPassword }; });
+    if (mode === 'server') return api('admin', 'POST', { password: pw, action: 'resetPassword', id: id }).then(function (res) { return { ok: res.ok, password: res.data && res.data.password, reason: res.data && res.data.error }; });
     var d = loadLocal(), lr = localFind(d, id); if (!lr) return Promise.resolve({ ok: false });
-    lr.password = defaultPassword(lr.name); saveLocal(d);
-    return Promise.resolve({ ok: true, defaultPassword: lr.password });
+    if (!lr.claimed) return Promise.resolve({ ok: false, reason: 'not_claimed' });
+    var np = randomCode(5) + '-' + randomCode(5);
+    lr.password = np; saveLocal(d);
+    return Promise.resolve({ ok: true, password: np });
   }
   function adminReset(pw) {
     photoCache = {};
@@ -581,7 +673,7 @@
     init: init, refresh: refresh, mode: function () { return mode; }, isServer: function () { return mode === 'server'; },
     list: list, get: get, getPhoto: getPhoto, clearPhoto: clearPhoto,
     getPickPhoto: getPickPhoto, clearPickPhoto: clearPickPhoto,
-    rate: rate, ratedRecently: ratedRecently, deviceRec: deviceRec, recordTap: recordTap, pendingTap: pendingTap,
+    rate: rate, couponWalletLink: couponWalletLink, ratedRecently: ratedRecently, deviceRec: deviceRec, recordTap: recordTap, pendingTap: pendingTap,
     deviceId: function () { return loadDevice().deviceId; }, deviceBackup: deviceBackup, deviceRestore: deviceRestore, adoptDevice: adoptDevice,
     walletCaps: walletCaps, walletSave: walletSave, walletAppleUrl: walletAppleUrl, walletSync: walletSync,
     ownerLogin: ownerLogin, ownerClaim: ownerClaim, ownerUpdate: ownerUpdate, ownerPhoto: ownerPhoto, ownerPickPhoto: ownerPickPhoto,
@@ -590,6 +682,7 @@
     adminList: adminList, adminPhoto: adminPhoto, adminRemovePhoto: adminRemovePhoto,
     adminPickPhoto: adminPickPhoto, adminRemovePickPhoto: adminRemovePickPhoto,
     adminSetFlag: adminSetFlag, adminReset: adminReset, adminResetPassword: adminResetPassword, setAdminPasswordLocal: setAdminPasswordLocal,
-    slug: slug, defaultPassword: defaultPassword, fmtNum: fmtNum, isHappyHourNow: isHappyHourNow, to12h: to12h, fileToDataUrl: fileToDataUrl
+    adminNewClaimCode: adminNewClaimCode, adminCouponStats: adminCouponStats,
+    slug: slug, fmtNum: fmtNum, isHappyHourNow: isHappyHourNow, to12h: to12h, fileToDataUrl: fileToDataUrl
   };
 })(window);

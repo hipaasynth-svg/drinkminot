@@ -258,17 +258,18 @@
       <label class="field"><span>Venue</span><select id="loginPick"></select></label>
       <label class="field"><span>Password</span><input type="password" id="loginPw" placeholder="name + 26" autocomplete="off"></label>
       <button class="btn accent" id="loginBtn">Log in</button>
-      <div id="loginErr" style="color:#F0866B;font-size:13px;font-weight:700;display:none">Wrong password. Try your name (letters only) + 26.</div>
+      <div id="loginErr" style="color:#F0866B;font-size:13px;font-weight:700;display:none">Wrong password.</div>
       <div class="note">Need your password? Email <a href="mailto:cody@drinkminot.com">cody@drinkminot.com</a>.</div>
     </div>
   </div>
 
-  <!-- OWNER FIRST-RUN CLAIM (opened once via ?owner=<id>, no password) -->
+  <!-- OWNER FIRST-RUN CLAIM (opened via ?owner=<id>&c=<setup code>) -->
   <div class="screen" id="claim">
     <div class="shead"><button class="back" data-home>←</button><b>Set up your page</b></div>
     <div class="scroll">
-      <div class="note">Welcome! This opened your dashboard <b>once</b> with no password. Set your password now to lock it to you — you'll use it every time after this.</div>
+      <div class="note">Welcome! Enter the <b>setup code</b> from your tag packet, then pick a password. The code proves this listing is yours and it only works once — after this you'll log in with your password.</div>
       <div class="field"><span>Your venue</span><div id="claimName" style="font-weight:800;font-size:16px"></div></div>
+      <label class="field"><span>Setup code</span><input type="text" id="claimCode" placeholder="8 characters from your packet" autocomplete="off" autocapitalize="characters" spellcheck="false" style="text-transform:uppercase;letter-spacing:.12em;font-weight:700"></label>
       <label class="field"><span>New password</span><input type="password" id="claimPw" placeholder="at least 4 characters" autocomplete="new-password"></label>
       <label class="field"><span>Confirm password</span><input type="password" id="claimPw2" placeholder="re-enter it" autocomplete="new-password"></label>
       <button class="btn accent" id="claimBtn">Set password &amp; open dashboard</button>
@@ -390,7 +391,25 @@
     // an explicit admin toggle so a punch card only ever shows where someone has actually
     // agreed to honor it. Rating stays open to every venue regardless.
     var couponActive = r.rewardsOn && rec.coupon && rec.coupon.expiresAt>Date.now();
-    var coupon = couponActive ? '<div class="coupon"><div><div style="font-size:12px;font-weight:800;color:#7CE05C">'+esc(rec.coupon.reward||'Reward earned!')+'</div><div style="font-size:11px;color:#9FE88C;font-weight:700;margin-top:2px">Code '+esc(rec.coupon.code)+' · exp '+new Date(rec.coupon.expiresAt).toLocaleDateString(undefined,{month:'short',day:'numeric'})+'</div></div><div style="font-size:10px;font-weight:800;color:#1a1430;background:#7CE05C;padding:5px 9px;border-radius:20px">EARNED</div></div>' : '';
+    // The reward strip. The code is now server-minted and single-use, so this is a
+    // hand-off rather than a claim: "Staff: redeem" opens the public redeem page for this
+    // code, where a staff PIN burns it. Staff can equally scan the QR on the customer's
+    // Wallet pass from their own phone and land on the same page — the PIN is what
+    // authorises it either way, so neither route needs a venue login.
+    var coupon = '';
+    if(couponActive){
+      var cc = rec.coupon;
+      var extra = (rec.coupons && rec.coupons.length>1)
+        ? '<div style="font-size:10px;color:#9FE88C;font-weight:700;margin-top:3px">+'+(rec.coupons.length-1)+' more reward'+(rec.coupons.length>2?'s':'')+' saved</div>' : '';
+      coupon = '<div class="coupon"><div>'+
+          '<div style="font-size:12px;font-weight:800;color:#7CE05C">'+esc(cc.reward||'Reward earned!')+'</div>'+
+          '<div style="font-size:11px;color:#9FE88C;font-weight:700;margin-top:2px">Code '+esc(couponPretty(cc.code))+' \u00b7 exp '+new Date(cc.expiresAt).toLocaleDateString(undefined,{month:'short',day:'numeric'})+'</div>'+
+          extra+
+        '</div>'+
+        '<a href="/redeem?c='+encodeURIComponent(cc.code)+'" style="text-decoration:none;font-size:10px;font-weight:800;color:#1a1430;background:#7CE05C;padding:6px 10px;border-radius:20px;white-space:nowrap">Staff: redeem</a>'+
+      '</div>'+
+      '<div id="cpWallet" data-cpcode="'+esc(cc.code)+'" style="margin-top:8px"></div>';
+    }
     var rewardCell = r.rewardsOn
       ? '<div style="text-align:right"><div class="lbl">Your punches</div><div class="ticks">'+ticks+'</div><div class="lbl" style="text-transform:none;margin-top:4px">'+done+'/'+need+'</div></div>'
       : '<div style="text-align:right;max-width:130px"><div class="lbl" style="text-transform:none;color:var(--muted)">Rewards coming soon here</div></div>';
@@ -604,8 +623,16 @@
   function confirmRate(rating,upvote){
     var r=cur(); if(!r) return;
     ov.step='confirming'; drawOverlay();
-    S.rate(r.id, rating, upvote).then(function(res){
-      if(!res.ok){ closeOverlay(); toast(res.reason==='rate_limited'?'Already rated today':'Could not submit'); return; }
+    S.rate(r.id, rating, upvote, tagSig).then(function(res){
+      if(!res.ok){
+        closeOverlay();
+        var why = res.reason;
+        toast(why==='rate_limited' ? 'Already rated today'
+            : why==='bad_tag'      ? 'Please tap the tag in-store to rate'
+            : why==='too_many'     ? 'Too many tries — give it a minute'
+            : 'Could not submit');
+        return;
+      }
       ov.step='confirmed'; drawOverlay();
       setTimeout(function(){
         closeOverlay(); restaurants=S.list(); renderTrack();
@@ -623,10 +650,14 @@
      timestamp (S.recordTap) so the Rate button can resurface as a "Rate now →" pill
      on the home screen for up to 2h, in case someone browses away mid-visit. */
   var tagId = null, tagVerified = false;
-  function enterTagMode(id){
+  // The `t` from the tag URL (/?r=<id>&t=<sig>), forwarded to POST /api/rate. The server
+  // decides what a missing one means — accepted-but-unverified while tags are still being
+  // reprogrammed, refused once DRINK_REQUIRE_TAG_SIG is on.
+  var tagSig = '';
+  function enterTagMode(id, sig){
     var idx = restaurants.findIndex(function(x){ return x.id===id; });
     if(idx<0) return false;
-    tagId = id; tagVerified = true; index = idx; // reuse cur()/openOverlay()/confirmRate() unmodified
+    tagId = id; tagVerified = true; index = idx; tagSig = sig || ''; // reuse cur()/openOverlay()/confirmRate() unmodified
     S.recordTap(id);
     // Show the screen BEFORE rendering into it: fitTagCard()/pcMeasure() read layout
     // (clientHeight/clientWidth), which is always 0 on a display:none ancestor —
@@ -638,13 +669,31 @@
   function openPaidPreview(id){
     var idx = restaurants.findIndex(function(x){ return x.id===id; });
     if(idx<0) return;
-    tagId = id; tagVerified = false; index = idx;
+    tagId = id; tagVerified = false; index = idx; tagSig = '';
     showScreen('tag');
     renderTagScreen();
+  }
+  /* "Add reward to Google Wallet" on an earned coupon. Requested after render because
+     building the pass is several calls to Google; if it can't be issued the slot stays
+     empty and the coupon still works from the strip above. */
+  function wireCouponWallet(){
+    var slot = document.getElementById('cpWallet');
+    if(!slot || !S.couponWalletLink) return;
+    var code = slot.getAttribute('data-cpcode');
+    if(!code) return;
+    S.couponWalletLink(code).then(function(url){
+      if(!url) return;
+      var s2 = document.getElementById('cpWallet');
+      if(!s2 || s2.getAttribute('data-cpcode')!==code) return;
+      s2.innerHTML = '<a href="'+esc(url)+'" target="_blank" rel="noopener" '+
+        'style="display:block;text-align:center;text-decoration:none;font-size:12px;font-weight:800;'+
+        'color:#fff;background:#14323b;padding:9px;border-radius:10px">Add reward to Google Wallet</a>';
+    });
   }
   function renderTagScreen(){
     var r = S.get(tagId); if(!r) return;
     $('#tagCardHost').innerHTML = tagCardHtml(r);
+    wireCouponWallet();
     loadHeroes();
     loadPickPhotos();
     renderTagFoot();   // must run before fitTagCard() — the foot's height (e.g. the
@@ -779,23 +828,32 @@
 
   /* ---------- owner ---------- */
   function showScreen(id){ ['tag','login','claim','dash'].forEach(function(s){ $('#'+s).classList.toggle('show', s===id); }); }
+  // Display grouping only. The server normalises before comparing, so spacing and case
+  // never affect whether a code is accepted.
+  function couponPretty(code){ var c=String(code||''); return c.length>8 ? c.slice(0,3)+' '+c.slice(3,8)+' '+c.slice(8) : c; }
   function publicUrl(id){ try{ return location.origin + '/?r=' + id; }catch(e){ return '/?r=' + id; } }
   var claimId=null;
-  function openClaim(id){
+  function openClaim(id, code){
     var r=S.get(id); if(!r) return;
     claimId=id;
     $('#claimName').textContent=r.name;
+    // The owner's QR carries the setup code (?owner=<id>&c=<code>), so scanning it fills
+    // the field in; typing the URL by hand leaves it blank and the code must be entered.
+    $('#claimCode').value=code||'';
     $('#claimPw').value=''; $('#claimPw2').value=''; $('#claimErr').style.display='none';
     var u=publicUrl(id), a=$('#claimUrl'); if(a){ a.textContent=u; a.href=u; }
     showScreen('claim');
   }
   function doClaim(){
     var pw=$('#claimPw').value||'', pw2=$('#claimPw2').value||'', err=$('#claimErr');
+    var code=($('#claimCode').value||'').trim();
+    if(!code){ err.textContent='Enter the setup code from your tag packet.'; err.style.display='block'; return; }
     if(pw.length<4){ err.textContent='Password must be at least 4 characters.'; err.style.display='block'; return; }
     if(pw!==pw2){ err.textContent='Passwords do not match.'; err.style.display='block'; return; }
-    S.ownerClaim(claimId, pw).then(function(res){
+    S.ownerClaim(claimId, pw, code).then(function(res){
       if(res && res.ok){ ownerPw=pw; toast('Password set — welcome!'); openDash(claimId); }
       else if(res && res.reason==='already_claimed'){ err.textContent='This page is already claimed — please log in.'; err.style.display='block'; setTimeout(function(){ openLogin(); var s=$('#loginPick'); if(s) s.value=String(claimId); }, 1200); }
+      else if(res && res.reason==='bad_code'){ err.textContent='That setup code does not match this listing. Check the packet, or email us for a new one.'; err.style.display='block'; }
       else { err.textContent='Could not set password. Please try again.'; err.style.display='block'; }
     });
   }
@@ -805,7 +863,16 @@
   }
   function doLogin(){
     var id=parseInt($('#loginPick').value,10), pw=$('#loginPw').value;
-    S.ownerLogin(id,pw).then(function(res){ if(res.ok){ openDash(id); } else { $('#loginErr').style.display='block'; } });
+    S.ownerLogin(id,pw).then(function(res){
+      if(res.ok){ openDash(id); return; }
+      // A listing nobody has claimed has no password at all, so "wrong password" would be
+      // misleading — point the owner at the setup code in their packet instead.
+      var e=$('#loginErr');
+      e.textContent=(res.reason==='not_claimed'||res.reason==='no_password')
+        ? 'This listing has not been set up yet. Use the setup code in your tag packet, or email us.'
+        : 'Wrong password.';
+      e.style.display='block';
+    });
   }
   var ownerPw='';
   function openDash(id){
@@ -833,6 +900,18 @@
       sec('House Picks billboard'+(paid?'':' (paid)'), (paid?'':'<div class="lbl" style="text-transform:none;margin-bottom:6px">Upgrade to publish these on your card.</div>')+pick(0,r,paid)+pick(1,r,paid)+pick(2,r,paid))+
       sec('Happy hour', happyBlock(r))+
       sec('Punch card', fld('Reward','<input type="text" id="fReward" value="'+esc(r.reward||'')+'">')+fld('Punches needed for reward',punchesSelect(r))+fld('Coupon valid for (days)','<input type="number" min="1" id="fDays" value="'+(r.couponValidDays||14)+'" style="width:110px">'))+
+      // The PIN any staff member types to redeem a reward, from their own phone, after
+      // scanning the customer's code. Hashed on the server and never readable back, so
+      // the field is always blank and a forgotten PIN is simply replaced. Without one
+      // set, rewards cannot be redeemed at all — deliberately, rather than falling back
+      // to something a customer could guess.
+      sec('Staff redemption PIN',
+        '<div class="lbl" style="text-transform:none;margin-bottom:6px">'+
+          (r.hasStaffPin
+            ? 'A PIN is set. Give it to anyone working the floor — they scan a customer&rsquo;s reward and enter this PIN on their own phone. Type a new one below to change it.'
+            : '<b style="color:#F0866B">No PIN set yet, so rewards cannot be redeemed.</b> Pick 6 digits and share them with your staff.')+
+        '</div>'+
+        fld('6-digit PIN','<input type="tel" inputmode="numeric" maxlength="6" id="fPin" placeholder="'+(r.hasStaffPin?'leave blank to keep current':'e.g. 481920')+'" autocomplete="off" style="width:150px;letter-spacing:.2em;font-weight:700">'))+
       sec('Minot&rsquo;s Most Wanted'+(r.featured?' ★':''), (r.featured?'<div class="lbl" style="text-transform:none;margin-bottom:6px">You&rsquo;re in the Spotlight — this exclusive offer shows on the curated guide.</div>':'<div class="lbl" style="text-transform:none;margin-bottom:6px">A featured-spotlight perk. Guests show their phone before ordering to redeem.</div>')+fld('Exclusive DrinkMinot offer','<input type="text" id="fOffer" maxlength="90" value="'+esc(r.offer||'')+'" placeholder="e.g. Free house pour with any purchase">'))+
       sec('Details', fld('Owner note','<textarea id="fNote" rows="3">'+esc(r.note||'')+'</textarea>')+fld('Website','<input type="text" id="fWebsite" value="'+esc(r.website||'')+'" placeholder="yourplace.com">'))+
       (r.agentEnabled ? sec('AI Assistant (beta)', agentBlock()) : '')+
@@ -899,7 +978,16 @@
       note:$('#fNote').value, website:$('#fWebsite').value,
       happyHour:{ enabled:$('#hhOn').checked, days:days, start:$('#hhStart').value||'15:00', end:$('#hhEnd').value||'18:00', special:$('#hhSpecial').value } };
     if(np && np.trim()) fields.password=np.trim();
-    S.ownerUpdate(id, ownerPw, fields).then(function(res){ if(res.ok){ if(np&&np.trim()) ownerPw=np.trim(); toast('Saved'); openDash(id); } else { toast('Save failed'); } });
+    // Blank means "keep the current PIN"; the server treats a blank string as "clear it",
+    // so it is only sent when the owner actually typed something.
+    var pinEl=$('#fPin'), pinVal=pinEl?(pinEl.value||'').replace(/\D/g,''):'';
+    if(pinVal) fields.staffPin=pinVal;
+    if(pinVal && pinVal.length!==6){ toast('Staff PIN must be exactly 6 digits'); return; }
+    S.ownerUpdate(id, ownerPw, fields).then(function(res){
+      if(res.ok){ if(np&&np.trim()) ownerPw=np.trim(); toast(pinVal?'Saved · staff PIN updated':'Saved'); openDash(id); }
+      else if(res.reason==='bad_pin_format'){ toast('Staff PIN must be exactly 6 digits'); }
+      else { toast('Save failed'); }
+    });
   }
 
   /* ---------- AI Assistant (beta) ---------- */
@@ -1006,12 +1094,12 @@
       if(sid){ renderTrack(); handleReturn(); return; }
       var oid=q&&q.get('owner');
       if(oid){ var on=parseInt(oid,10), or=S.get(on);
-        if(or){ renderTrack(); if(or.claimed){ openLogin(); var s=$('#loginPick'); if(s) s.value=String(on); } else { openClaim(on); } return; } }
+        if(or){ renderTrack(); if(or.claimed){ openLogin(); var s=$('#loginPick'); if(s) s.value=String(on); } else { openClaim(on, q.get('c')||''); } return; } }
       // Straight-to-admin: password login prefilled to this venue, no first-run claim.
       var lid=q&&q.get('login');
       if(lid){ var ln=parseInt(lid,10); if(S.get(ln)){ renderTrack(); openLogin(); var ls=$('#loginPick'); if(ls) ls.value=String(ln); return; } }
       var rid=q&&q.get('r');
-      if(rid && enterTagMode(parseInt(rid,10))) return;
+      if(rid && enterTagMode(parseInt(rid,10), q.get('t')||'')) return;
       renderTrack();
     });
   }

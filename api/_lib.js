@@ -95,7 +95,38 @@ var RAW = [
 ];
 
 function slug(name) { return String(name).toLowerCase().replace(/[^a-z0-9]/g, ''); }
-function defaultPassword(name) { return slug(name) + '26'; }
+
+/* ---------- claim codes and generated passwords ----------
+   There is deliberately no formula that turns a venue's name into its credential.
+   A venue's password used to be slug(name) + '26', which meant every listing on the
+   site could be logged into by anyone who could read the venue's name — the formula
+   was even published in the README. Both are now random per venue: the claim code is
+   generated once, stored on the profile, and only ever shown in the admin console, and
+   a password exists only after the real owner sets one.
+   The alphabet omits O/0/I/1 so a code can be read aloud or printed on a card without
+   being mistyped. */
+var CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function randomCode(len) {
+  len = len || 8;
+  var bytes = crypto.randomBytes(len), out = '';
+  for (var i = 0; i < len; i++) out += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
+  return out;
+}
+// Admin "reset password" hands the owner a fresh random password once. It is never
+// derivable from the venue, so a reset can't be guessed by the next person who reads
+// the listing.
+function randomPassword() { return randomCode(5) + '-' + randomCode(5); }
+function normalizeCode(c) { return String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+// Timing-safe comparison of two strings of possibly different lengths.
+function safeEqual(a, b) {
+  var ba = Buffer.from(String(a)), bb = Buffer.from(String(b));
+  if (ba.length !== bb.length) return false;
+  try { return crypto.timingSafeEqual(ba, bb); } catch (e) { return false; }
+}
+function verifyClaimCode(profile, code) {
+  if (!profile || !profile.claimCode) return false;
+  return safeEqual(normalizeCode(profile.claimCode), normalizeCode(code));
+}
 
 // Real star average (0 when there are no ratings). The client only *shows* it once a venue
 // has MIN_RATINGS verified reviews — see store.js isRated — otherwise it shows "New to DrinkMinot".
@@ -115,7 +146,6 @@ function verifyPw(pw, stored) {
   var p = stored.split('$');
   return crypto.createHash('sha256').update(p[1] + ':' + pw).digest('hex') === p[2];
 }
-function isDefaultPw(name, stored) { return verifyPw(defaultPassword(name), stored); }
 
 /* ---------- signed owner session tokens (HMAC) ----------
    If DRINK_SESSION_SECRET isn't set, sign with a random secret generated once per cold
@@ -168,7 +198,16 @@ function seedProfile(id) {
     // AI Assistant (beta) — always starts off; only a super admin can turn it on per venue
     // (see api/admin.js setFlag), independent of claimed/paid. Not a Stripe-gated tier yet.
     agentEnabled: false,
-    password: hashPw(defaultPassword(name)),
+    // No password until the real owner sets one through the claim flow (see api/owner.js).
+    // A null password cannot be logged into at all — there is nothing to guess.
+    password: null,
+    // The one secret that lets a listing be claimed. Random, stored, admin-visible only,
+    // and stripped from every public response by publicView below.
+    claimCode: randomCode(),
+    // Hash of the 6-digit staff PIN that authorises a reward redemption from any
+    // staff member's own phone. Null until the owner sets one, and a venue with no
+    // PIN simply cannot redeem — better than a default a stranger could guess.
+    staffPin: null,
     stripeCustomerId: null, stripeSubscriptionId: null,
     hasPhoto: false, hasPickPhoto: [false, false, false],
     picks: claimed ? ['Cold beer cave', 'ND craft & local cans', 'Weekend wine tasting'] : ['', '', ''],
@@ -249,13 +288,34 @@ function normalizeProfile(p) {
     if (p.over21 == null) p.over21 = !!row[4];
     if (p.alsoOnEat == null) p.alsoOnEat = !!row[5];
   }
+  // Profiles written before claim codes existed get one on first read (getProfile and
+  // getAllRestaurants persist it), so an already-live listing becomes claimable with a
+  // real code instead of the old name-derived password.
+  if (typeof p.claimCode !== 'string' || !p.claimCode) p.claimCode = randomCode();
+  if (typeof p.staffPin !== 'string') p.staffPin = null;
+  // A stored password that predates this change is a hash of the old derivable default
+  // for any listing nobody has claimed, so it must not stay usable. login() refuses an
+  // unclaimed profile outright; dropping the hash here means it cannot be used even if
+  // the listing is later marked claimed by an admin.
+  if (!p.claimed) p.password = null;
   return p;
 }
 async function getProfile(id) {
   id = parseInt(id, 10);
   if (isRemoved(id)) return null; // pulled venue: never resurface via ?r=<id>, owner login, or photo fetch
   var raw = await kvGet(rKey(id));
-  if (raw) { try { return normalizeProfile(JSON.parse(raw)); } catch (e) { /* fall through to reseed */ } }
+  if (raw) {
+    try {
+      var stored = JSON.parse(raw);
+      var hadCode = typeof stored.claimCode === 'string' && !!stored.claimCode;
+      var prof = normalizeProfile(stored);
+      // normalizeProfile mints a claim code for records written before they existed.
+      // It has to be written back, or the next read mints a different one and the code
+      // the admin console just displayed would already be wrong.
+      if (!hadCode) await saveProfile(id, prof);
+      return prof;
+    } catch (e) { /* fall through to reseed */ }
+  }
   var def = seedProfile(id);
   if (!def) return null;
   await kvSet(rKey(id), JSON.stringify(def));
@@ -321,7 +381,14 @@ async function getAllRestaurants() {
   for (var j = 0; j < ids.length; j++) {
     var profRaw = results[j * 2], votesFlat = results[j * 2 + 1];
     var profile = null;
-    if (profRaw) { try { profile = normalizeProfile(JSON.parse(profRaw)); } catch (e) {} }
+    if (profRaw) {
+      try {
+        var stored2 = JSON.parse(profRaw);
+        var hadCode2 = typeof stored2.claimCode === 'string' && !!stored2.claimCode;
+        profile = normalizeProfile(stored2);
+        if (!hadCode2) toSeed.push(profile); // persist the freshly minted claim code
+      } catch (e) {}
+    }
     if (!profile) { profile = seedProfile(ids[j]); toSeed.push(profile); }
     out2.push(mergeProfileVotes(profile, flatToObj(votesFlat, ZERO_VOTES)));
   }
@@ -346,6 +413,9 @@ function publicView(list) {
     restaurants: list.filter(function (r) { return !r.hidden; }).map(function (r) {
       var o = {}; for (var k in r) o[k] = r[k];
       delete o.password;
+      delete o.claimCode; // the claim secret: admin-only, never in a public response
+      delete o.staffPin;  // the redemption secret: never leaves the server at all
+      o.hasStaffPin = !!r.staffPin; // the dashboard needs to know whether one is set
       o.rating = avgRating(r);
       return o;
     })
@@ -398,12 +468,251 @@ function json(res, code, obj) {
 }
 
 var ADMIN_DEFAULT = 'drink-admin';
-function checkAdmin(pw) { return pw === (process.env.DRINK_ADMIN_PASSWORD || ADMIN_DEFAULT); }
+function checkAdmin(pw) { return safeEqual(pw, process.env.DRINK_ADMIN_PASSWORD || ADMIN_DEFAULT); }
+
+/* ================================================================
+   Verified presence: signed tags, per-device limits, server-held
+   punches, and single-use coupons.
+
+   Everything below exists because the same three things used to be
+   enforced only in the customer's browser:
+     - that a rating came from someone standing in the venue
+       (a ?r=<id> query param, and ids are printed on every tag),
+     - that it was one rating per device per day (localStorage),
+     - that a punch card was actually full before a reward appeared
+       (localStorage again, and /api/device stored whatever the
+       client posted).
+   A coupon is only worth as much as the punch count behind it, and a
+   punch count is only worth as much as the proof of presence behind
+   it, so the three move together.
+   ================================================================ */
+
+/* ---------- signed tag tokens ----------
+   A tag's URL carries /?r=<id>&t=<sig>, where sig is an HMAC of that venue id
+   under DRINK_TAG_SECRET. It is deterministic, so a venue's tag URL never changes
+   and a printed tag never goes stale unless the secret is rotated.
+
+   This deliberately uses its own secret rather than DRINK_SESSION_SECRET: that one
+   falls back to a random value per cold start (fine for 12h sessions, fatal for
+   something printed on a physical tag, which would stop verifying on redeploy).
+
+   Rollout: tags already in venues carry no `t`, so enforcement is OFF unless
+   DRINK_REQUIRE_TAG_SIG is '1' AND the secret is set. Reprint or reprogram the tags
+   from the admin console first, then set the flag. With enforcement off, an
+   unsigned rating is still accepted but is reported as unverified so the admin
+   console can show how far the migration has got. */
+function tagSecret() { return process.env.DRINK_TAG_SECRET || ''; }
+function tagSigFor(id) {
+  var s = tagSecret();
+  if (!s) return '';
+  return crypto.createHmac('sha256', s).update('tag:' + parseInt(id, 10)).digest('hex').slice(0, 16);
+}
+// Enforcement is only possible when a stable secret exists; asking for it without
+// one would refuse every rating, so it stays off and says so.
+function tagSigEnforced() { return !!tagSecret() && process.env.DRINK_REQUIRE_TAG_SIG === '1'; }
+function verifyTagSig(id, sig) {
+  var want = tagSigFor(id);
+  if (!want) return false;
+  return safeEqual(want, String(sig || '').toLowerCase());
+}
+
+/* ---------- atomic rate limiting / one-shot claims ----------
+   Both are built on Redis primitives so they hold across serverless instances:
+   INCR+EXPIRE for a counter, and SET NX EX for "only the first caller wins".
+   The in-memory fallback mirrors the semantics for local dev. */
+var memTtl = global.__drinkttl || (global.__drinkttl = new Map());
+function memAlive(key) {
+  var e = memTtl.get(key);
+  if (!e) return false;
+  if (Date.now() > e.exp) { memTtl.delete(key); return false; }
+  return true;
+}
+// Returns true if this was the first caller within the window — used for
+// "one rating per device per venue per 24h", where a second caller must lose.
+async function claimOnce(key, ttlSec) {
+  if (hasKV()) {
+    var r = await kvCmd(['SET', key, '1', 'NX', 'EX', String(ttlSec)]);
+    return r === 'OK' || r === 'ok';
+  }
+  if (memAlive(key)) return false;
+  memTtl.set(key, { exp: Date.now() + ttlSec * 1000, n: 1 });
+  return true;
+}
+// Returns { ok, count }. ok is false once count exceeds max inside the window.
+async function rateLimit(key, max, windowSec) {
+  if (hasKV()) {
+    var n = await kvCmd(['INCR', key]);
+    n = parseInt(n, 10) || 1;
+    if (n === 1) await kvCmd(['EXPIRE', key, String(windowSec)]);
+    return { ok: n <= max, count: n };
+  }
+  var e = memAlive(key) ? memTtl.get(key) : null;
+  if (!e) { e = { exp: Date.now() + windowSec * 1000, n: 0 }; }
+  e.n += 1; memTtl.set(key, e);
+  return { ok: e.n <= max, count: e.n };
+}
+async function clearLimit(key) {
+  if (hasKV()) return kvCmd(['DEL', key]);
+  memTtl.delete(key); return 1;
+}
+
+var RATE_ONCE_TTL = 86400;            // one rating per device per venue per 24h
+var RATE_IP_MAX = 60, RATE_IP_WINDOW = 3600;   // coarse ceiling per IP per hour
+function clientIp(req) {
+  var h = (req && req.headers) || {};
+  var xf = String(h['x-forwarded-for'] || '').split(',')[0].trim();
+  return xf || String(h['x-real-ip'] || '') || 'unknown';
+}
+
+/* ---------- device punch state (server-owned) ----------
+   drinkminot:dev:<token> holds { perRest: { <venueId>: {done,total,...} } } and is
+   now written only here, never from a client payload. See api/device.js, whose
+   'put' action is gone for exactly that reason. */
+var DEV_KEY = function (t) { return 'drinkminot:dev:' + t; };
+var DEV_TOKEN = /^dev_[a-z0-9]{6,80}$/i;
+function validDeviceToken(t) { return DEV_TOKEN.test(String(t || '')); }
+async function getDevice(token) {
+  var raw = await kvGet(DEV_KEY(token));
+  if (!raw) return { perRest: {} };
+  try { var d = JSON.parse(raw); return { perRest: d.perRest || {} }; } catch (e) { return { perRest: {} }; }
+}
+async function saveDevice(token, dev) {
+  await kvSet(DEV_KEY(token), JSON.stringify({ perRest: dev.perRest || {}, updatedAt: Date.now() }));
+}
+
+/* ---------- coupons ----------
+   A coupon is a server record from birth. The code is minted here, stored here,
+   and can be redeemed exactly once, because `redeemedAt` is set under a SET NX
+   claim rather than a read-modify-write.
+
+   Previously the code was generated in the browser (5 base36 characters) and
+   never sent anywhere, so nothing could tell a real one from a string typed into
+   a notes app, and the same code worked until it expired. The code is longer now
+   because the redeem page takes it as a query param and the QR types it for the
+   customer, so length is free. */
+var COUPON_KEY = function (c) { return 'drinkminot:coupon:' + c; };
+var COUPON_DEV_KEY = function (t) { return 'drinkminot:couponsof:' + t; };
+var COUPON_CODE_LEN = 10;
+function couponCodeFormat(raw) {
+  // Grouped for anyone who has to read it aloud or type it by hand.
+  var s = normalizeCode(raw);
+  return s.length > 5 ? s.slice(0, 5) + '-' + s.slice(5) : s;
+}
+function newCouponCode() { return 'DRK' + randomCode(COUPON_CODE_LEN); }
+
+async function issueCoupon(venueId, deviceToken, reward, validDays) {
+  var code = newCouponCode();
+  var days = Math.max(1, parseInt(validDays, 10) || 14);
+  var rec = {
+    code: code, venueId: parseInt(venueId, 10), device: String(deviceToken || ''),
+    reward: String(reward || 'Reward earned!').slice(0, 120),
+    issuedAt: Date.now(), expiresAt: Date.now() + days * 86400000,
+    redeemedAt: null, redeemedNote: ''
+  };
+  await kvSet(COUPON_KEY(code), JSON.stringify(rec));
+  // An index per device so a customer's own coupons can be listed back to them
+  // after a cache wipe. Outstanding coupons accumulate rather than overwrite —
+  // the old client kept one slot per venue, so filling a second card silently
+  // destroyed an unredeemed reward.
+  var idx = await getCouponIndex(deviceToken);
+  idx.push(code);
+  while (idx.length > 50) idx.shift();
+  await kvSet(COUPON_DEV_KEY(deviceToken), JSON.stringify(idx));
+  return rec;
+}
+async function getCouponIndex(deviceToken) {
+  var raw = await kvGet(COUPON_DEV_KEY(deviceToken));
+  if (!raw) return [];
+  try { var a = JSON.parse(raw); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+}
+async function getCoupon(code) {
+  var raw = await kvGet(COUPON_KEY(normalizeCode(code)));
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch (e) { return null; }
+}
+function couponState(c) {
+  if (!c) return 'unknown';
+  if (c.redeemedAt) return 'redeemed';
+  if (c.expiresAt && Date.now() > c.expiresAt) return 'expired';
+  return 'valid';
+}
+// Marks a coupon redeemed, once. The SET NX claim is what makes "once" true even
+// if two staff phones submit the same code in the same second.
+async function redeemCoupon(code, note) {
+  code = normalizeCode(code);
+  var c = await getCoupon(code);
+  if (!c) return { ok: false, reason: 'unknown' };
+  var st = couponState(c);
+  if (st !== 'valid') return { ok: false, reason: st, coupon: c };
+  var won = await claimOnce('drinkminot:redeeming:' + code, 60);
+  if (!won) return { ok: false, reason: 'redeemed', coupon: c };
+  var fresh = await getCoupon(code);
+  if (fresh && fresh.redeemedAt) return { ok: false, reason: 'redeemed', coupon: fresh };
+  c.redeemedAt = Date.now();
+  c.redeemedNote = String(note || '').slice(0, 60);
+  await kvSet(COUPON_KEY(code), JSON.stringify(c));
+  return { ok: true, coupon: c };
+}
+/* Walks every coupon record. Used for the admin's issued-vs-redeemed figures, which
+   are derived from the records themselves rather than from counters — a counter can
+   drift, a scan cannot. Bounded so a large store can't hang a serverless request; the
+   cap is reported so the console can say the figure is partial rather than imply it is
+   complete. */
+var COUPON_SCAN_CAP = 5000;
+async function scanCoupons() {
+  var out = [];
+  if (!hasKV()) {
+    mem.forEach(function (v, k) {
+      if (k.indexOf('drinkminot:coupon:') !== 0) return;
+      try { out.push(JSON.parse(v)); } catch (e) {}
+    });
+    return out;
+  }
+  var cursor = '0', guard = 0;
+  do {
+    var r = await kvCmd(['SCAN', cursor, 'MATCH', 'drinkminot:coupon:*', 'COUNT', '500']);
+    if (!Array.isArray(r)) break;
+    cursor = String(r[0]);
+    var keys = Array.isArray(r[1]) ? r[1] : [];
+    if (keys.length) {
+      var vals = await kvPipeline(keys.map(function (k) { return ['GET', k]; }));
+      vals.forEach(function (v) { if (v) { try { out.push(JSON.parse(v)); } catch (e) {} } });
+    }
+    guard++;
+  } while (cursor !== '0' && out.length < COUPON_SCAN_CAP && guard < 200);
+  return out;
+}
+
+// What the public redeem page may see before a PIN is entered: enough to show
+// staff what they are about to honour, and nothing that identifies a customer.
+function couponPublic(c) {
+  if (!c) return null;
+  return {
+    code: c.code, venueId: c.venueId, reward: c.reward,
+    issuedAt: c.issuedAt, expiresAt: c.expiresAt,
+    redeemedAt: c.redeemedAt || null, state: couponState(c)
+  };
+}
+
+/* ---------- staff PIN ----------
+   A 6-digit PIN the owner sets and can rotate, hashed at rest like a password.
+   It is what authorises a redemption from any staff member's own phone, with no
+   venue login and no shared device: they scan the customer's QR, which carries
+   only the coupon code, and the PIN is the part that proves they work there.
+   6 digits rather than 4 because the redeem endpoint is public — a million
+   combinations plus the lockouts below, instead of ten thousand. */
+var PIN_RE = /^[0-9]{6}$/;
+function validPinFormat(p) { return PIN_RE.test(String(p || '')); }
+var PIN_FAIL_PER_COUPON = 5, PIN_FAIL_COUPON_WINDOW = 900;   // 5 tries / 15 min
+var PIN_FAIL_PER_VENUE = 10, PIN_FAIL_VENUE_WINDOW = 900;    // 10 tries / 15 min
+var PIN_FAIL_PER_IP = 20, PIN_FAIL_IP_WINDOW = 900;
+
 
 module.exports = {
   PHOTO_KEY: PHOTO_KEY, PICK_PHOTO_KEY: PICK_PHOTO_KEY,
-  seedIds: seedIds, seedProfile: seedProfile, slug: slug, defaultPassword: defaultPassword,
-  hashPw: hashPw, verifyPw: verifyPw, isDefaultPw: isDefaultPw,
+  seedIds: seedIds, seedProfile: seedProfile, slug: slug,
+  hashPw: hashPw, verifyPw: verifyPw,
+  randomCode: randomCode, randomPassword: randomPassword, verifyClaimCode: verifyClaimCode,
   signToken: signToken, verifyToken: verifyToken,
   persistent: persistent, hasKV: hasKV,
   kvGet: kvGet, kvSet: kvSet, kvDel: kvDel,
@@ -413,5 +722,21 @@ module.exports = {
   getRestaurant: getRestaurant, getAllRestaurants: getAllRestaurants, resetAll: resetAll,
   publicView: publicView,
   readBody: readBody, rawBody: rawBody, json: json, checkAdmin: checkAdmin,
-  stripe: stripe, stripeConfigured: stripeConfigured, verifyStripeSig: verifyStripeSig
+  stripe: stripe, stripeConfigured: stripeConfigured, verifyStripeSig: verifyStripeSig,
+  // verified presence
+  tagSigFor: tagSigFor, verifyTagSig: verifyTagSig, tagSigEnforced: tagSigEnforced,
+  claimOnce: claimOnce, rateLimit: rateLimit, clearLimit: clearLimit, clientIp: clientIp,
+  RATE_ONCE_TTL: RATE_ONCE_TTL, RATE_IP_MAX: RATE_IP_MAX, RATE_IP_WINDOW: RATE_IP_WINDOW,
+  // device punch state (server-owned)
+  validDeviceToken: validDeviceToken, getDevice: getDevice, saveDevice: saveDevice,
+  // coupons
+  issueCoupon: issueCoupon, getCoupon: getCoupon, redeemCoupon: redeemCoupon,
+  getCouponIndex: getCouponIndex, couponState: couponState, couponPublic: couponPublic,
+  scanCoupons: scanCoupons, couponCodeFormat: couponCodeFormat,
+  // staff PIN
+  validPinFormat: validPinFormat,
+  PIN_FAIL_PER_COUPON: PIN_FAIL_PER_COUPON, PIN_FAIL_COUPON_WINDOW: PIN_FAIL_COUPON_WINDOW,
+  PIN_FAIL_PER_VENUE: PIN_FAIL_PER_VENUE, PIN_FAIL_VENUE_WINDOW: PIN_FAIL_VENUE_WINDOW,
+  PIN_FAIL_PER_IP: PIN_FAIL_PER_IP, PIN_FAIL_IP_WINDOW: PIN_FAIL_IP_WINDOW,
+  normalizeCode: normalizeCode, safeEqual: safeEqual
 };

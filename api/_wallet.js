@@ -78,6 +78,114 @@ function objectBody(token, venueId, venueName, done, total) {
   };
 }
 
+/* ================= the reward coupon, as its own Offer pass =================
+   The punch card above is a loyaltyObject and keeps counting. A earned reward is a
+   different thing, so it is Google's offerObject — the actual voucher type, with its
+   own barcode and redemption instructions, sitting beside the card in Wallet.
+
+   The payoff is the redemption step: when staff burn the coupon, the server PATCHes
+   this object's state to COMPLETED and it visibly greys out in the customer's own
+   Wallet. The pass becomes the receipt, so there is nothing for a screenshot to fake
+   and nothing for staff to cross-check by hand.
+
+   The barcode carries the public redeem URL, not the PIN — anyone may scan it, and the
+   venue's staff PIN on the landing page is what authorises the burn. That is what lets
+   any staff member redeem from their own phone without a venue login. */
+var OFFER_CLASS_SUFFIX = 'drinkminot_reward_v1';
+function offerClassId() { return issuerId() + '.' + OFFER_CLASS_SUFFIX; }
+function offerObjectId(code) { return issuerId() + '.rw_' + safeTok(code); }
+
+function offerClassBody() {
+  return {
+    id: offerClassId(),
+    issuerName: 'DrinkMinot',
+    title: 'DrinkMinot Reward',
+    provider: 'DrinkMinot',
+    redemptionChannel: 'INSTORE',
+    reviewStatus: 'UNDER_REVIEW',
+    hexBackgroundColor: '#2F6B3F',
+    countryCode: 'US'
+  };
+}
+function offerObjectBody(token, code, venueName, reward, expiresAt) {
+  var o = {
+    id: offerObjectId(code),
+    classId: offerClassId(),
+    state: 'ACTIVE',
+    // Grouped the same way the site prints it, for anyone typing it by hand.
+    barcode: {
+      type: 'QR_CODE',
+      value: SITE + '/redeem?c=' + encodeURIComponent(code),
+      alternateText: code
+    },
+    textModulesData: [
+      { header: venueName || 'DrinkMinot', body: reward || 'Reward earned!' },
+      { header: 'How to use it', body: 'Show this to staff. They scan it and enter the venue PIN on their own phone — no app needed.' }
+    ]
+  };
+  if (expiresAt) {
+    // Wallet greys the pass out by itself once this passes, which keeps the customer's
+    // view honest even if they never open the site again.
+    o.validTimeInterval = { end: { date: new Date(expiresAt).toISOString() } };
+  }
+  return o;
+}
+
+async function ensureOfferClass(tok) {
+  var g = await fetch(WOBASE + '/offerClass/' + encodeURIComponent(offerClassId()), { headers: { Authorization: 'Bearer ' + tok } });
+  if (g.status === 200) return;
+  var r = await fetch(WOBASE + '/offerClass', {
+    method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+    body: JSON.stringify(offerClassBody())
+  });
+  if (!r.ok && r.status !== 409) throw new Error('offer_class: ' + r.status);
+}
+
+// Create (or refresh) the reward pass and return its Add-to-Google-Wallet link.
+async function googleSaveOffer(token, code, venueName, reward, expiresAt) {
+  var sa = loadSA();
+  if (!sa || !issuerId()) return { ok: false, reason: 'not_configured' };
+  var tok = await accessToken(sa);
+  await ensureOfferClass(tok);
+  var id = offerObjectId(code);
+  var body = offerObjectBody(token, code, venueName, reward, expiresAt);
+  var g = await fetch(WOBASE + '/offerObject/' + encodeURIComponent(id), { headers: { Authorization: 'Bearer ' + tok } });
+  if (g.status === 200) {
+    await fetch(WOBASE + '/offerObject/' + encodeURIComponent(id), {
+      method: 'PATCH', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  } else {
+    var r = await fetch(WOBASE + '/offerObject', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!r.ok && r.status !== 409) return { ok: false, reason: 'offer_object_' + r.status };
+  }
+  var claims = {
+    aud: 'google', typ: 'savetowallet', origins: [SITE],
+    payload: { offerObjects: [{ id: id, classId: offerClassId() }] }
+  };
+  return { ok: true, saveUrl: 'https://pay.google.com/gp/v/save/' + signJwt(claims, sa) };
+}
+
+// Mark the reward pass used. Returns whether Wallet actually acknowledged it — the
+// caller treats this as best-effort, because a redemption the venue already honoured
+// must never be undone by a wallet or network problem.
+async function googleCompleteOffer(token, code) {
+  var sa = loadSA();
+  if (!sa || !issuerId()) return false;
+  var tok = await accessToken(sa);
+  var id = offerObjectId(code);
+  var g = await fetch(WOBASE + '/offerObject/' + encodeURIComponent(id), { headers: { Authorization: 'Bearer ' + tok } });
+  if (g.status !== 200) return false; // never added to Wallet; nothing to grey out
+  var r = await fetch(WOBASE + '/offerObject/' + encodeURIComponent(id), {
+    method: 'PATCH', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ state: 'COMPLETED' })
+  });
+  return r.ok;
+}
+
 async function ensureClass(tok) {
   var g = await fetch(WOBASE + '/loyaltyClass/' + encodeURIComponent(classId()), { headers: { Authorization: 'Bearer ' + tok } });
   if (g.status === 200) return;
@@ -275,7 +383,9 @@ function applePkpass(token, venueId, venueName, done, total) {
 module.exports = {
   googleConfigured: googleConfigured, appleConfigured: appleConfigured,
   googleSave: googleSave, googlePatch: googlePatch, applePkpass: applePkpass,
+  googleSaveOffer: googleSaveOffer, googleCompleteOffer: googleCompleteOffer,
   // exported for offline tests
   _signJwt: signJwt, _saveUrl: saveUrl, _classBody: classBody, _objectBody: objectBody,
+  _offerClassBody: offerClassBody, _offerObjectBody: offerObjectBody, _offerObjectId: offerObjectId,
   _classId: classId, _objectId: objectId, _b64url: b64url, _zipStore: zipStore, _crc32: crc32
 };

@@ -4,6 +4,7 @@ var L = require('./_lib');
 // POST /api/admin { password, action, ... }
 //   action: 'list' | 'photo' {id, dataUrl} | 'removePhoto' {id}
 //           | 'setFlag' {id, claimed?, paid?} | 'resetPassword' {id}
+//           | 'newClaimCode' {id}
 //           | 'reset'
 // Admin can manage claimed/paid status, photos, and passwords — the operational
 // levers a site needs day to day. It has no action that writes to a vote counter;
@@ -19,11 +20,46 @@ module.exports = async function (req, res) {
       var out = list.map(function (r) {
         var o = {}; for (var k in r) o[k] = r[k];
         delete o.password;
-        o.defaultPassword = L.defaultPassword(r.name);
-        o.passwordChanged = !L.isDefaultPw(r.name, r.password);
+        // Never the hash, and never a derivable password — there is no longer one to show.
+        // The admin console gets the venue's claim code (the secret to hand the owner in
+        // person) and whether a password has been set yet. claimCode is deliberately kept
+        // here and stripped in publicView; this response is admin-authenticated.
+        o.hasPassword = !!r.password;
+        delete o.staffPin;
+        o.hasStaffPin = !!r.staffPin;
+        // The signed tag URL to print or program onto this venue's tag. Deterministic,
+        // so it never changes unless DRINK_TAG_SECRET is rotated — an already-printed tag
+        // stays valid forever. Empty when no secret is configured, in which case
+        // signatures can't be issued or enforced at all.
+        o.tagSig = L.tagSigFor(r.id);
         return o;
       });
-      L.json(res, 200, { ok: true, restaurants: out });
+      L.json(res, 200, {
+        ok: true, restaurants: out,
+        // Surfaced so the console can say plainly where the tag migration stands rather
+        // than leaving "verified presence" as an assumption.
+        tagSigAvailable: !!L.tagSigFor(1),
+        tagSigEnforced: L.tagSigEnforced()
+      });
+      return;
+    }
+    // Coupon accounting — the first owner-visible number that proves the loyalty card
+    // did anything: issued vs redeemed per venue. Scans the coupon records rather than
+    // keeping a counter, so it can never drift from the records themselves.
+    if (b.action === 'couponStats') {
+      var statIds = L.seedIds();
+      var stats = {};
+      for (var s2 = 0; s2 < statIds.length; s2++) stats[statIds[s2]] = { issued: 0, redeemed: 0, outstanding: 0, expired: 0 };
+      var scanned = await L.scanCoupons();
+      scanned.forEach(function (c) {
+        var row = stats[c.venueId];
+        if (!row) return;
+        row.issued++;
+        if (c.redeemedAt) row.redeemed++;
+        else if (c.expiresAt && Date.now() > c.expiresAt) row.expired++;
+        else row.outstanding++;
+      });
+      L.json(res, 200, { ok: true, stats: stats, total: scanned.length });
       return;
     }
     if (b.action === 'reset') {
@@ -79,9 +115,26 @@ module.exports = async function (req, res) {
       L.json(res, 200, { ok: true });
       return;
     }
+    // Hands the owner a fresh random password, shown once in the response. It is not
+    // derivable from the venue, so unlike the old name-based default it can't be guessed
+    // by the next person to read the listing.
     if (b.action === 'resetPassword') {
-      await L.updateProfile(profile.id, function (r) { r.password = L.hashPw(L.defaultPassword(r.name)); });
-      L.json(res, 200, { ok: true, defaultPassword: L.defaultPassword(profile.name) });
+      // An unclaimed listing has no owner yet, and login refuses it regardless — handing
+      // out a password for one would be a dead end. Use its claim code instead.
+      if (!profile.claimed) { L.json(res, 409, { error: 'not_claimed', claimCode: profile.claimCode }); return; }
+      var newPw = L.randomPassword();
+      await L.updateProfile(profile.id, function (r) { r.password = L.hashPw(newPw); });
+      L.json(res, 200, { ok: true, password: newPw });
+      return;
+    }
+    // Issues a new claim code for a listing that has not been claimed yet — for when a
+    // printed card goes astray. Refused once a listing is claimed, since the code is
+    // spent at that point and rotating it would imply it still grants something.
+    if (b.action === 'newClaimCode') {
+      if (profile.claimed) { L.json(res, 409, { error: 'already_claimed' }); return; }
+      var code = L.randomCode();
+      await L.updateProfile(profile.id, function (r) { r.claimCode = code; });
+      L.json(res, 200, { ok: true, claimCode: code });
       return;
     }
     L.json(res, 400, { error: 'action' });
