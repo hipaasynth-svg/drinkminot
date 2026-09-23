@@ -207,6 +207,18 @@ function crossCheck(a, b, aLabel, bLabel) {
   ok(ca != null && cb != null, 'both repos expose a readable api/_lib.js');
   if (!ca || !cb) return;
 
+  // Distinguish "the twin has not adopted this contract yet" from "the twin disagrees
+  // about it". Both are real divergence and both fail — but during the rollout of this
+  // guard the first one is expected until the twin's own PR merges, and a bare
+  // "7900 / null" would send someone hunting for a bug that isn't there.
+  var adopted = Object.keys(cb).some(function (k) { return cb[k] !== null; });
+  if (!adopted) {
+    ok(false, bLabel + ' declares none of the shared constants — it has not adopted this ' +
+              'contract yet. Expected only while this guard is being rolled out: merge ' +
+              bLabel + "'s counterpart PR and this clears itself.");
+    return;
+  }
+
   // Both sites sell one offer at one price. An owner on one site and an owner on the
   // other compare notes, so a divergence here is a divergence a customer can see.
   Object.keys(ca).forEach(function (k) {
