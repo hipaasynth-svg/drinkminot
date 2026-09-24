@@ -53,15 +53,20 @@ not the guarantee. It is one environment variable away — but flipping it break
 already printed with a bare `/?r=<id>` link, so tags must be reprogrammed first. Sequence in
 [docs/DEPLOY.md](docs/DEPLOY.md#rolling-out-signed-tags).
 
-**2. 21 of 29 venues show unverified hours.** A local checking "is the Landing open right
-now" gets "Verify hours" instead of an answer, and repeat local visits are the only thing
-that makes a tag worth a monthly fee to an owner. This needs no code — just the admin hours
-editor — and it is the highest-return work available on this site.
+**2. There is no admin editor for hours or addresses on this site.** EatMinot has one —
+`setInfo` in `api/admin.js`, `adminSetInfo` in `store.js` — and this repo has neither, so a
+wrong or placeholder value can only be corrected by writing to the store directly. That is
+the gap worth closing, and it is a code gap, not data entry.
 
-25 of 29 venues also have no street address on file, but that **no longer breaks
-directions**: the Get directions button falls back to the venue name, which Google Maps
-resolves as well as a street would. The card still displays "Minot, ND" where a street would
-read better, which is cosmetic rather than blocking.
+21 of the 29 rows in `RAW` carry `"Verify hours"` and 25 carry `"Minot, ND"` instead of a
+street. Those are *seed fallbacks*, not necessarily what the site serves: a stored profile
+keeps its own `hours` and `address` (`normalizeProfile` backfills only `category`, `over21`
+and `alsoOnEat`), so anything already corrected in the store overrides them. Check the live
+`/api/state` for what is actually being served rather than reading `seedProfile()` — this
+file previously reported seed values as live ones, which was wrong.
+
+Missing street addresses do not affect directions: the Get directions button falls back to
+the venue name, which Google Maps resolves as well as a street would.
 
 ---
 
