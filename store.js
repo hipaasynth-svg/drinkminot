@@ -595,7 +595,7 @@
     return Promise.resolve({ ok: true });
   }
   function adminSetFlag(pw, id, flags) {
-    if (mode === 'server') return api('admin', 'POST', { password: pw, action: 'setFlag', id: id, claimed: flags.claimed, paid: flags.paid, featured: flags.featured, hidden: flags.hidden, rewardsOn: flags.rewardsOn }).then(function (res) { return refresh().then(function () { return { ok: res.ok }; }); });
+    if (mode === 'server') return api('admin', 'POST', { password: pw, action: 'setFlag', id: id, claimed: flags.claimed, paid: flags.paid, featured: flags.featured, hidden: flags.hidden, rewardsOn: flags.rewardsOn, agentEnabled: flags.agentEnabled, foundingOffer: flags.foundingOffer }).then(function (res) { return refresh().then(function () { return { ok: res.ok, error: res.data && res.data.error }; }); });
     if (!checkAdminLocal(pw)) return Promise.resolve({ ok: false });
     var d = loadLocal(), lr = localFind(d, id); if (!lr) return Promise.resolve({ ok: false });
     if (typeof flags.claimed === 'boolean') { lr.claimed = flags.claimed; if (!lr.claimed) { lr.paid = false; lr.featured = false; } }
@@ -603,6 +603,12 @@
     if (typeof flags.featured === 'boolean') { lr.featured = flags.featured; if (lr.featured) lr.claimed = true; }
     if (typeof flags.hidden === 'boolean') { lr.hidden = flags.hidden; }
     if (typeof flags.rewardsOn === 'boolean') { lr.rewardsOn = flags.rewardsOn; }
+    if (typeof flags.agentEnabled === 'boolean') { lr.agentEnabled = flags.agentEnabled; }
+    if (typeof flags.foundingOffer === 'boolean') {
+      var takenLocal = d.restaurants.filter(function (x) { return x.id !== id && (x.founding || x.foundingOffer); }).length;
+      if (flags.foundingOffer && takenLocal >= 3) return Promise.resolve({ ok: false, error: 'founding_full' });
+      lr.foundingOffer = flags.foundingOffer;
+    }
     saveLocal(d); cache = decorateList(d.restaurants); return Promise.resolve({ ok: true });
   }
   // Issues a fresh setup code for an unclaimed listing (admin-only).

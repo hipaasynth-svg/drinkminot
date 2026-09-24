@@ -41,6 +41,7 @@
   .chip.hide.on{background:#6E655C;border-color:#6E655C;color:#fff}
   .chip.rewards.on{background:#2F6B3F;border-color:#2F6B3F;color:#fff}
   .chip.agent.on{background:#5B3FA0;border-color:#5B3FA0;color:#fff}
+  .chip.founding.on{background:#8F5A1F;border-color:#8F5A1F;color:#fff}
   .item.hidden-row{opacity:.55}
   label.file{font-size:12px;font-weight:800;color:var(--accent);cursor:pointer}
   label.file input{display:none}
@@ -84,6 +85,8 @@
   var adminPw='', all=[];
   function toast(m){var t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('show');},1700);}
   function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
+  function foundingTaken(){ return all.filter(function(x){return x.founding||x.foundingOffer;}).length; }
 
   // Says plainly whether ratings are cryptographically gated yet. Without this the state
   // is invisible and "verified presence" is an assumption rather than a fact.
@@ -162,6 +165,7 @@
             '<span class="chip hide'+(r.hidden?' on':'')+'" data-hide="'+r.id+'">'+(r.hidden?'Hidden — show':'Hide')+'</span>'+
             '<span class="chip rewards'+(r.rewardsOn?' on':'')+'" data-rewards="'+r.id+'">'+(r.rewardsOn?'Rewards ON ★':'Rewards off')+'</span>'+
             '<span class="chip agent'+(r.agentEnabled?' on':'')+'" data-agent="'+r.id+'">'+(r.agentEnabled?'AI Assistant ON (beta)':'AI Assistant off')+'</span>'+
+            '<span class="chip founding'+((r.founding||r.foundingOffer)?' on':'')+'" data-founding="'+r.id+'">'+(r.founding?'Founding ✓ ($59/mo)':(r.foundingOffer?'Founding offer pending':'Founding Three ('+(3-foundingTaken())+' left)'))+'</span>'+
           '</div>'+
           (r.paid ? pickThumbsHtml(r) : '')+
         '</div></div>';
@@ -221,6 +225,17 @@
     document.querySelectorAll('[data-agent]').forEach(function(el){ el.onclick=function(){ var id=+el.getAttribute('data-agent'), r=all.filter(function(x){return x.id===id;})[0];
       if(!r.agentEnabled && !confirm('Turn ON the AI Assistant (beta) for “'+esc(r.name)+'”? Requires the minot-agent service to be configured (MINOT_AGENT_URL / MINOT_AGENT_SERVICE_KEY).')) return;
       S.adminSetFlag(adminPw,id,{agentEnabled:!r.agentEnabled}).then(function(){ toast(r.agentEnabled?'AI Assistant turned off':'AI Assistant turned on (beta)'); reloadList(); }); }; });
+    document.querySelectorAll('[data-founding]').forEach(function(el){ el.onclick=function(){ var id=+el.getAttribute('data-founding'), r=all.filter(function(x){return x.id===id;})[0];
+      if(r.founding){ toast('Already redeemed — on the founding $59/mo rate, cannot be revoked here.'); return; }
+      var turningOn=!r.foundingOffer;
+      if(turningOn){
+        if(foundingTaken()>=3){ toast('All 3 Founding spots are taken.'); return; }
+        if(!confirm('Grant the Founding Three offer to “'+esc(r.name)+'”? On their next checkout they get a 10-week free trial, then $59/mo — cheaper than the standard $79. Only '+(3-foundingTaken())+' spot(s) left.')) return;
+      }
+      S.adminSetFlag(adminPw,id,{foundingOffer:turningOn}).then(function(res){
+        if(res && res.error==='founding_full'){ toast('All 3 Founding spots are taken.'); return; }
+        toast(turningOn?'Founding offer granted':'Founding offer revoked'); reloadList();
+      }); }; });
     document.querySelectorAll('[data-rmpw]').forEach(function(el){ el.onclick=function(){
       var id=+el.getAttribute('data-rmpw');
       S.adminResetPassword(adminPw,id).then(function(res){

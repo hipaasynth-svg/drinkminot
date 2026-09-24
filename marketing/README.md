@@ -4,7 +4,7 @@ Print-ready sales bundles handed to prospective bars. Each **packet is 3 pages**
 
 1. **`onepager`** — the sales sheet: zero tracking, the 3-punch deal, opening offer,
    the ratings mechanic, measurable-return strip with the $59-vs-return payback,
-   hotel-QR roadmap, Founding Five, three QR taps, and the wallet badge.
+   hotel-QR roadmap, Founding Three, three QR taps, and the wallet badge.
 2. **`comparison`** — the punch-card vs. two-quarters-in-a-shot-glass argument.
 3. **`bestpractices`** — the owner playbook for getting results.
 
@@ -41,6 +41,13 @@ written to `marketing/out/` — open and print them from any browser.
 
 ## Pricing shown
 
-$59/month founding rate (struck-through $79), **locked for a year, cancel anytime**;
-standard price $79 after. Starter hardware: **four NFC tags/QRs + two cards**, with
-table stickers available **at cost** (recommended — every table = more taps).
+Standard price **$79/month**. Founding Three rate **$59/month** (shown struck through from
+$79), **cancel anytime**, after **10 weeks free** — and **3 spots only**, matching the cap
+`FOUNDING_LIMIT` actually enforces in `api/_lib.js`. Starter hardware: **four NFC tags/QRs +
+two cards**, with table stickers available **at cost** (recommended — every table = more
+taps).
+
+These numbers must match `STANDARD_PRICE_CENTS` / `FOUNDING_PRICE_CENTS` in `api/_lib.js`
+and the same pair on EatMinot. Both sites sell one offer at one price; a bar and a
+restaurant comparing notes should hear the same thing. Do not reintroduce "locked for a
+year" — nothing in the code enforces a lock, so nothing printed may promise one.
