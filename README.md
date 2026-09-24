@@ -53,15 +53,15 @@ not the guarantee. It is one environment variable away — but flipping it break
 already printed with a bare `/?r=<id>` link, so tags must be reprogrammed first. Sequence in
 [docs/DEPLOY.md](docs/DEPLOY.md#rolling-out-signed-tags).
 
-**2. The directory mostly cannot answer the question it exists to answer.** **25 of 29 live
-venues have no street address**, and **21 show unverified hours**. A drinks directory that
-cannot tell a local where a bar is or whether it is open is not something they will come
-back to — and repeat visits are the only thing that makes a tag worth a monthly fee to an
-owner. This needs no code, just an afternoon with Google Maps and the admin hours editor,
-and it is the highest-return work available on this site.
+**2. 21 of 29 venues show unverified hours.** A local checking "is the Landing open right
+now" gets "Verify hours" instead of an answer, and repeat local visits are the only thing
+that makes a tag worth a monthly fee to an owner. This needs no code — just the admin hours
+editor — and it is the highest-return work available on this site.
 
-Do not sell founding spots on this site until #2 is fixed. The pitch depends on locals
-using the directory, and right now they mostly can't.
+25 of 29 venues also have no street address on file, but that **no longer breaks
+directions**: the Get directions button falls back to the venue name, which Google Maps
+resolves as well as a street would. The card still displays "Minot, ND" where a street would
+read better, which is cosmetic rather than blocking.
 
 ---
 
@@ -149,7 +149,7 @@ and how the twin sites are kept in sync: [docs/DEPLOY.md](docs/DEPLOY.md).**
 ## Sibling site
 
 [**EatMinot**](https://github.com/hipaasynth-svg/EatMinot.com) is the same system for
-restaurants — 47 venues, better address data, same offer at the same price. The two are kept
+restaurants — 47 venues, same offer at the same price. The two are kept
 honest by a shared drift guard that fails CI if their pricing, trial length or slot cap ever
 diverge, or if a flag one site's admin console offers is not actually wired up.
 

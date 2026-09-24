@@ -317,9 +317,19 @@
   // "Minot, ND" don't, so the button only appears once a venue's address is confirmed —
   // never routing someone to a vague pin.
   function hasRealAddress(r){ return !!(r && r.address && /^\d/.test(r.address.trim())); }
-  function mapsUrl(r){ return 'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(r.address); }
+  // Google Maps resolves a venue name + city perfectly well as a destination, so a listing
+  // with no street address on file still gets working directions. Prefer the street address
+  // when we have one because it is unambiguous; otherwise fall back to the name, which is
+  // what a local would have typed anyway. This deliberately replaces gating the button on
+  // hasRealAddress: suppressing the button left the venues that most needed finding with no
+  // way to be found, and it re-broke itself every time a listing was added without an
+  // address.
+  function mapsQuery(r){
+    return hasRealAddress(r) ? r.address : (r.name + ', Minot, ND');
+  }
+  function mapsUrl(r){ return 'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(mapsQuery(r)); }
   function directionsBtn(r){
-    return hasRealAddress(r) ? '<a class="dirBtn" data-dir href="'+mapsUrl(r)+'" target="_blank" rel="noopener">📍 Get directions</a>' : '';
+    return '<a class="dirBtn" data-dir href="'+mapsUrl(r)+'" target="_blank" rel="noopener">📍 Get directions</a>';
   }
   // The Rolodex card sits inside a draggable carousel (#stage) whose pointerdown handler
   // treats any tap as a swipe/select gesture — stop it there so tapping the button opens
